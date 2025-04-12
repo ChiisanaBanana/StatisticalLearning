@@ -20,7 +20,7 @@ library(glmnet)
 
 Using a little bit of algebra, show that $p(x)= \frac{e^{\beta_0 +\beta_1x_1}}{1+e^{\beta_0+\beta_1x_1}}$ is equivalent to $\frac{p(X)}{1-p(X)} = e^{\beta_0+\beta_1x_1}$. In other words, the logistic function representation and logit representation for the logistic regression model are equivalent. Note, if you can't see these equations, use your mouse to hover over them and they should pop up.
 
-![My work](C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/Problem1.JPG)
+![My work](C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning/Problem1.JPG)
 
 # Solution:
 
@@ -65,7 +65,7 @@ print(answerB)
 (a) Create a binary variable, mpg01, that contains a 1 if mpg contains a value above its median, and a 0 if mpg contains a value below its median. You can compute the median using the median() function. 
 
 ```{r}
-auto <- read.csv("C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/Auto.csv")
+auto <- read.csv("C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning/Auto.csv")
 mpgMedian <- median(auto$mpg)
 auto <- auto %>%
   mutate(mpg01 = ifelse(mpg>=mpgMedian, 1, 0))
@@ -240,6 +240,7 @@ We now review k-fold cross-validation.
 (b) What are the advantages and disadvantages of k-fold cross-validation
 relative to:
     i. The validation set approach?
+      
     ii. LOOCV?
       Best possible results as it goes through ALL of the potential combinations. LOOCV is an extreme case of k-fold where k = n. The downside to this is that this is the most computationally intensive as it gets exponentially more intensive the more sets of data that exist. 
 
@@ -248,9 +249,12 @@ relative to:
 a) K-fold will divide the dataset into k amount of equal parts and then train the model k-1 amount of times, each time excluding 1 fold which will be the validation test. All the results need to be averaged and then you find the average across all the folds.
 
 b)    Validation Set:
+      
       There is never a crossover between training and testing set.
       A big advantage is that the validation set is much easier to run but has higher variance whereas kfold is more computationally intensive as it needs to do many iterations more times and as such reduces variance. 
+      
       LOOCV:
+    
       kFold is faster than LOOCV and that's due to LOOCV being a form of kFold, specifically, the best variation. However, the downside is that in LOOCV k = n so k always runs the max amount of times. As such, it is even more so, MUCH more computationally extensive than kFold generally as everytime another n is added the runtime goes up exponentially. That is the biggest drawback, it does have higher variance but it has much lower bias as it gets tested on literally everything. This generally results in LOOCV being the better outcome since you are guaranteed to get the most optimal combination at the cost of computational power.
 
 
@@ -325,7 +329,7 @@ From the data in [Miscellaneous Datasets](http://www.stat.ufl.edu/~winner/datase
 # Solution:
 
 ```{r}
-rockData <- read.table("C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/rock_aquifer.csv")
+rockData <- read.table("C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning/rock_aquifer.csv")
 rockData
 ```
 
@@ -390,32 +394,10 @@ VIF will be used to see how much correlation there is.
 vif <- 1/(1-0.6837)
 vif
 ```
-3.16 is generally a pretty good amount.
+3.1 is generally a pretty good amount.
 
 ```{r}
 regFullLog <- regsubsets(`Log Permeability` ~ ., rockData, nvmax = 11)
-summary(regFullLog)
+summary(RegFullLog)
 ```
 
-```{r}
-regSumLog <- summary(regFullLog)
-regSumLog$cp
-regSumLog$bic
-regSumLog$adjr2
-```
-```{r}
-which.min(regSumLog$cp)
-which.min(regSumLog$bic)
-which.max(regSumLog$adjr2)
-```
-
-```{r}
-permeabilityMod <- lm(`Log Permeability` ~ Porosity + `Insoluble Residue` + `Grain Length of a-axis` + `SD of a-axis length` + `Grain Length of b-axis` + `SD of b-axis length` + Calcite + Dolomite, rockData)
-summary(permeabilityMod)
-```
-I just chose 8 since it was right between the two. That said, 6 could be argued to be better as it showed all having some sort of significance (though sample was a categorical var but it could still mean something) yet with 8 it doesn't show "SD of a-axis length" too have any meaningful significance. Given this was the middle of the 3 tests I still ended up going with this one and I find it to be the most balanced.
-
-```{r}
-1/(1-0.6415)
-```
-Decent VIF, better than the previous one (less multi-coll) but not as good as what is in the solutions. I think it's a drawback I'd take though.

@@ -1,0 +1,27 @@
+---
+title: "Introduction to R"
+output: html_notebook
+author: Halan Badilla
+---
+
+### Setup
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+```
+
+### Setting up Vectors
+
+```{r}
+x <- c(0, 636, 42, 112)
+y <- c(8, 3, 5, 7)
+```
+
+### Vector Length
+
+```{r}
+length(x)
+length(y)
+```
+

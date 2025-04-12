@@ -1,0 +1,201 @@
+---
+title: "The Great Banana Midterm"
+output: html_notebook
+author: "Halan Badilla Osorio
+---
+Libraries needed
+
+```{r}
+library(tidyverse)
+library(caret)
+library(leaps)
+library(ISLR2)
+library(dplyr)
+library(ggplot2)
+library(ggcorrplot)
+```
+
+Setting the seed for replication. (Hopefully it works)
+
+```{r}
+set.seed(813)
+
+```
+
+Reading banana_quality.csv, (The location will vary per machine)
+
+```{r}
+bananadf <- read.csv("C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning/banana_quality.csv")
+view(bananadf)
+bananadf
+```
+This is to test whether there are any NA values in bananadf and then also get the sum of NA values.
+In this case there were none.
+```{r}
+which(is.na(bananadf))
+sum(is.na(bananadf))
+```
+Checking how many unique observations are in the Quality column.
+```{r}
+unique(bananadf$Quality)
+```
+Adding two new columns, "QualityBool" this apply "Good" qualities as 1 and "Bad" as 0.
+It will also add an ID column, this is simply adding a number to every row.
+```{r}
+bananadf <- bananadf %>%
+  mutate(QualityBool = ifelse(Quality=="Good", 1, 0)) %>%
+  mutate(id = 1:nrow(bananadf))
+
+bananadf
+```
+Double checking whatis in QualityBool.
+```{r}
+unique(bananadf$QualityBool)
+```
+This is now getting rid of the Quality Column essentially making the entire data frame numeric, it is now being placed into a new Data Frame called "bananaNumeric"
+```{r}
+bananaNumeric <- bananadf %>%
+  select( -Quality)
+
+bananaNumeric
+```
+When looking at this forget about ID, it is simply a placeholder for splitting the data into training and test data later.
+
+Both of these demonstrate the same thing. The first one shows the correlation between the variables from -1 to 1, the closer to -1 or 1 the more related they are. A positive shows a positive relationship while negative is a negative relationship. 
+```{r}
+cor(bananaNumeric)
+ggcorrplot(cor(bananaNumeric))
+```
+Here I divide the Data Frame into 2 different ones, one will be the training dat while the other is a test data. There is a split of 70/30, The training data consists of 70% of the data while the other 30% is for testing.
+
+```{r}
+# I'm simply doing all of them for the sake of practice.
+bananaTrain <- bananadf %>% sample_frac(0.70)
+bananaTest  <- anti_join(bananadf, bananaTrain, by = 'id')
+```
+Here you can see the amount of rows now.
+
+```{r}
+bananaTrain
+bananaTest
+```
+Best Subset Selection, this will go through all possible predictor combinations to see what the best combination of all of them is. In this case, best subset selection says that using all 7 predictors will work the best for predicting sweetness. There is not much of a difference between the best and the next 3 so if you would really like to simplify you could get rid of Softness, Ripeness and Acidity from the model to simplify it more with little to no loss. (BIC values of -2700 vs -2600)
+
+```{r}
+bestTest <- regsubsets(Sweetness~ . -Quality -id, bananaTrain, nvmax = 7)
+BestSweetSum <- summary(bestTest)
+BestSweetSum
+plot(bestTest, scale = "bic")
+```
+Forward Stepwise Selection is similar to Best Subset as it attempts to also find the best subset of variable combinations but it reduces the computational need by evaluating far fewer models so it is prone to potentially missing better subsets. That said, it still gives the same results as best subset, however, it actually finds the top 4 subsets as equivalent.
+
+```{r}
+forwardTest <- regsubsets(Sweetness~. -Quality -id, bananaTest, nvmax = 7, method = "backward")
+ForwardSweetSum <- summary(forwardTest)
+ForwardSweetSum
+plot(forwardTest, scale = "bic")
+```
+Basically the same as Forward, Backwards Stepwise Selection goes backwards instead of forward so it could find different groups. It still gave the same results though.
+
+```{r}
+backwardTest <- regsubsets(Sweetness~. -Quality -id, bananaTest, nvmax = 7, method = "forward")
+BackwardSweetSum <- summary(backwardTest)
+BackwardSweetSum
+plot(backwardTest, scale = "bic")
+```
+
+Here for k, we're dealing with a couple thousand rows of k. 5-10  is generally used from what I've seen so I went with the latter as the dataset has 8000 rows making it decently big. Realistically 5 could still be used though.
+
+```{r}
+# Ik 10 is kind of excessive but I want to see how good it is.
+trControl <- trainControl(method = "cv", number = 10)
+lambdaGrid = 10^seq(2, -1, length = 100)
+```
+
+Here we are doing Ridge Regression, it is testing for all the variables based off what we saw earlier but using all the data as it will run recursively on its own. The RMSE of 1.53 is not exactly the greatest, I'd want something below 1 but it's alright for this. I tested it without the other predictors (Softness, Ripeness and Acidity) but it was actually very slightly worse.
+
+```{r}
+ridgeBanana <- train(Sweetness ~ . -id, data = bananaNumeric, method = "glmnet", trControl = trControl, metric = "RMSE", tuneGrid = expand.grid(alpha=0, lambda = lambdaGrid))
+
+rBananaPrediction <- predict(ridgeBanana, bananaNumeric)
+
+rBananaRMSE <- RMSE(rBananaPrediction, bananaNumeric$Sweetness)
+
+rBananaRMSE
+```
+
+Here is a visual of how much the predictors affect and correlate with Sweetness. Similar to what was shown in the Subset Selection, Softness, Ripeness and Acidity have the least amount of effect but there is enough that it does affect the prediction.
+
+```{r}
+coef(ridgeBanana$finalModel, ridgeBanana$bestTune$lambda)
+```
+
+Same as above, but here we are testing with Lasso instead of Ridge. Same as above as well, the RMSE was still generally the same and als oaround ~1.5
+
+```{r}
+lassoBanana <- train(Sweetness ~ . -id, data = bananaNumeric, method = "glmnet", trControl = trControl, metric = "RMSE", tuneGrid = expand.grid(alpha=1, lambda = lambdaGrid))
+
+lBananaPrediction <- predict(lassoBanana, bananaNumeric)
+
+lBananaRMSE <- RMSE(lBananaPrediction, bananaNumeric$Sweetness)
+
+lBananaRMSE
+```
+
+Unlike Ridge, the Lasso model actually showed that Softness had no influence on Sweetness. Ripeness and Acidity are both almost negligible as well but there is a little.
+
+```{r}
+coef(lassoBanana$finalModel, lassoBanana$bestTune$lambda)
+```
+
+Even though I did all those tests, while it feels like I did something wrong, everything seems to be relevant and significant. There are 3 coefficients that could potentially not be needed, however the best set selection and ridge shows that they have SOME importance. These would be Softness, Ripeness and Acidity. For forward and backward they seem to give the best result whether you include them or not but in best set there is a slightly better BIC score. For Ridge you can see that Softness, Ripeness and Acidity have the lowest amounts but are still significant. In Lasso, Softness's score is even more insignificant as it shows it to simply be irrelevant. With these slightly conflicting results for the sake of accurateness I believe including all of them is the right way to go even if it only subtly improves the results.
+
+However, looking at the R^2 and Adjusted R^2 it is too low for my liking so plenty of the variation can't be explained by the input but the low p-values shows the confidence of them actually affecting the model.
+
+```{r}
+finalBananModel <- lm(Sweetness~. -id, data = bananaNumeric)
+summary(finalBananModel)
+```
+
+Here is a visual representation of the bananas Quality, colored for easy viewing and identification, and from it we can gleam that generally Good bananas on average seem to both be heavier and be sweeter implying that Good bananas should preferably be heavier and sweeter.
+
+```{r}
+ggplot(bananaTrain, aes(x = Weight, y = Sweetness, color = factor(Quality))) +
+  geom_point(alpha = 0.6) +
+  stat_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE, fullrange = TRUE) +
+  labs(title = "Banana Quality Prediction") +
+  theme_bw()
+
+```
+
+Lastly, these are predictions on bananas using Logistic Regression alongside their confusion matrixes derived from that log model.
+
+On average the test errors for both models are between 30%-35% meaning that roughly 30%-35% of the predictions are incorrect. For more accurate details we can look at the confusion matrices.
+
+The accuracy on both is around ~65%
+
+```{r}
+logBanana <- glm(QualityBool ~ Sweetness + Weight, data = bananaTrain, family = binomial)
+logPrediction1 <- predict(logBanana, bananaTest, type = "response")
+probPrediction1 <- ifelse(logPrediction > 0.5, 1, 0)
+testError1 <- mean(probPrediction != bananaTest$QualityBool)
+cMatrix1 <- confusionMatrix(factor(probPrediction1), factor(bananaTest$QualityBool))
+
+logPrediction2 <- predict(logBanana, bananaTest, type = "response")
+probPrediction2 <- ifelse(logPrediction2 > 0.75, 1, 0)
+testError2 <- mean(probPrediction2 != bananaTest$QualityBool)
+cMatrix2 <- confusionMatrix(factor(probPrediction2), factor(bananaTest$QualityBool))
+
+cat("Test Error [Prediction 0.5 Threshold] ", testError, "\n")
+cat("Test Error 2 [Prediction 0.75 Threshold] ", testError2, "\n\n")
+
+print(cMatrix1)
+print(cMatrix2)
+
+
+```
+
+
+
+
+

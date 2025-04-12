@@ -1,0 +1,212 @@
+---
+title: "R Notebook"
+author: "Data obtained from tidytuesday - who got it from kaggle - who got it from
+  the NRF (National Retail Federation)"
+output:
+  html_document:
+    df_print: paged
+---
+
+<hr style="border: 2px solid #D5006D;">
+___
+<div style="text-align:center;">
+Roses are <span style="color:red">red</span>, 
+violets are <span style="color:blue">blue</span>. ❤  
+Data has <span style="color:purple">p</span><span style="color:orange">a</span><span style="color:red">t</span><span style="color:purple">t</span><span style="color:orange">e</span><span style="color:red">r</span><span style="color:purple">n</span><span style="color:orange">s</span>, 
+and models find <span style="color:darkgreen; font-weight:bold;">clues</span>.  
+ <span style="color:pink; font-weight:bold;">°˖✿˚⋆ChatGPT⋆˚✿˖°</span>
+</div>
+___
+<hr style="border: 2px solid #D5006D;">
+<div style="text-align:center;">
+<span style="color:red; font-weight:bold; font-size:56px;">💕 Exploratory Data Analysis 💕</span>
+</div>
+
+
+# <span style="color:pink; font-weight:bold;">Libraries ❤</span>
+
+```{r}
+library(tidytuesdayR)
+library(tidyverse)
+library(ggcorrplot)
+```
+
+# <span style="color:pink; font-weight:bold;">Data ❤</span>
+
+```{r}
+tuesdata <- tidytuesdayR::tt_load('2024-02-13')
+```
+
+```{r}
+
+historical_spending <- tuesdata$historical_spending
+gifts_age <- tuesdata$gifts_age
+gifts_gender <- tuesdata$gifts_gender
+```
+
+
+# <span style="color:pink; font-weight:bold;">Valentines Goal ❤</span>
+
+Today we are going to take a brief pause from our regular schedule to focus on just some data exploration. Many of you have already seen this before but you will need it for your projects and so we will use this holiday to have fun either catching up on or learning how to make some nice data visualizations in R.
+
+
+# <span style="color:pink; font-weight:bold;">Checking the Data ❤</span>
+
+As we've said before, we need to get a good look at our data and check for a few things:
+
+- Are there missing values?
+- Are there outliers we need to be aware of?
+- Are there unusual names for our variables?
+- Do we know the units we are dealing in?
+- Are the vectors type representative of the data they hold? (numerical, character, etc)
+- Is there anything of note we should consider?
+
+```{r}
+# Lets just check the first few rows of our data
+head(gifts_age, 10)
+head(gifts_gender, 10)
+head(historical_spending, 10)
+
+```
+
+> <span style="color:purple">NOTES:</span>
+
+# <span style="color:pink; font-weight:bold;"> Summary Statistics ❤</span>
+
+```{r}
+# Lets look at a summary of the data
+summary(gifts_age)
+summary(gifts_gender)
+summary(historical_spending)
+
+# Now try to take a glimpse
+glimpse(gifts_age)
+glimpse(gifts_gender)
+glimpse(historical_spending)
+
+```
+
+> <span style="color:purple">NOTES:</span>
+
+# <span style="color:pink; font-weight:bold;">Data Wrangling ❤</span>
+
+```{r}
+# lets restructure our data so we can make visuals! First we will look at column names
+
+colnames(gifts_age)
+colnames(gifts_gender)
+colnames(historical_spending)
+```
+Now we are going to pivot our data long-wise so that we can plot it! Keep track of numerical and non-numerical! Why do you think we need to keep this in mind when we pivot?
+What is the new shape of our data?
+
+```{r}
+Valen_long <- gifts_age %>%
+  pivot_longer(cols = -Age, 
+               names_to = "Feature", 
+               values_to = "Value")
+
+Valen_long
+```
+
+
+```{r}
+Valen_long_Gender <- gifts_gender %>%
+    pivot_longer(cols = -Gender, 
+               names_to = "Feature", 
+               values_to = "Value")
+
+Valen_long_Gender
+  
+```
+
+```{r}
+glimpse(historical_spending)
+```
+
+
+```{r}
+Valen_long_History <- historical_spending %>%
+    pivot_longer(cols = -c(Year, PercentCelebrating, PerPerson), 
+               names_to = "Feature", 
+               values_to = "Value")
+
+Valen_long_History
+  
+```
+
+
+> <span style="color:purple">NOTES:</span>
+
+
+# <span style="color:pink; font-weight:bold;"> Data Visuals ❤</span>
+
+Now we can finally start getting some visuals for our data! Before we actually make our visuals there are a few things you want to keep in mind:
+
+- What is the goal of the visual?
+- Are there any relationships you would like to see?
+- What variables stand out to you as possibly being the most integral?
+
+Let's Look! Let's See!
+
+
+```{r}
+ggplot(Valen_long, aes(x = Feature, y = Value ,fill = Feature)) +
+  geom_col(alpha = 0.5, position = "dodge") +
+  facet_wrap(~Age) + 
+  theme_minimal() +
+  labs(title = "Bar Graph of Spending by Age range",
+       x = "Valentine Gifts",
+       y = "Money Spent") +
+  scale_fill_manual(values = c("#FFB3C6","#FFC3A0", "#FFD1DC", "#FF9AA2", "#D4A5A5", "#E6C6C0" ,"#C6A2D9","#B5EAD7") )+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+> <span style="color:purple">NOTES:</span>
+
+
+```{r}
+ggplot(Valen_long_Gender, aes(x = Feature, y = Value ,fill = Feature)) +
+  geom_col(alpha = 0.5, position = "dodge") +
+  facet_wrap(~Gender) + 
+  theme_minimal() +
+  labs(title = "Bar Graph of Spending by Gender",
+       x = "Valentine Gifts",
+       y = "Money Spent") +
+  scale_fill_manual(values = c("#FFB3C6","#FFC3A0", "#FFD1DC", "#FF9AA2", "#D4A5A5", "#E6C6C0" ,"#C6A2D9","#B5EAD7") )+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+> <span style="color:purple">NOTES:</span>
+
+```{r}
+ggplot(Valen_long_History, aes(x = Feature, y = Value ,fill = Feature)) +
+  geom_col(alpha = 0.5, position = "dodge") +
+  facet_wrap(~Year) + 
+  theme_minimal() +
+  labs(title = "Bar Graph of Spending by Year",
+       x = "Valentine Gifts",
+       y = "Money Spent") +
+  scale_fill_manual(values = c("#FFB3C6","#FFC3A0", "#FFD1DC", "#FF9AA2", "#D4A5A5", "#E6C6C0" ,"#C6A2D9","#B5EAD7") )+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+```{r}
+Cor <- cor(historical_spending)
+ggcorrplot(Cor, colors = c("purple","white", "pink"))
+```
+
+```{r}
+ggplot(historical_spending) +
+  geom_point( mapping = aes(x = PercentCelebrating, y = as.factor(Year)), color = "red") +
+  ggtitle("Percent Spending by Year") +
+  xlab("Percent of People Celebrating") +
+  ylab("Year") +
+  theme(panel.background = element_rect(fill = "#eddaef"))
+```
+
+
+> <span style="color:purple">NOTES:</span>
+
+
+> Finally: Please submitt the html for this lab to canvas for credit by the end of the day February 14, 2025 ❤

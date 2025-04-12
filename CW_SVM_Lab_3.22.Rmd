@@ -1,0 +1,160 @@
+---
+title: "Chapter 9 Lab: Support Vector Machines"
+output: html_notebook
+---
+
+We will use the Auto data set to predict whether a given car gets high or low gas mileage. 
+
+What's happening:
+(a) Create a binary variable that takes on a 1 for cars with gas mileage above the median, and a 0 for cars with gas mileage below the median. 
+
+(b) Fit a support vector classifier to the data with various values of cost, in order to predict whether a car gets high or low gas mileage. Report the cross-validation errors associated with different values of this parameter. Comment on your results. Note you will need to fit the classifier without the gas mileage variable to produce sensible results. 
+
+(c) Now repeat (b), this time using SVMs with radial and polynomial basis kernels, with different values of gamma and degree and cost. Comment on your results. (d) Make some plots to back up your assertions in (b) and (c).
+
+```{r}
+# Load the required libraries
+library(ISLR2)
+library(caret)
+library(MASS)
+library(MLeval)
+library(tidyverse)
+set.seed(1234)
+```
+
+
+```{r}
+head(Auto)
+
+summary(Auto)
+sum(is.na(Auto))
+```
+
+Create a new data frame to remove missing values and delete the column 'name'.
+
+```{r}
+data <-na.omit(Auto)
+data <-data %>% select(-name)
+```
+
+Part a: Create a binary variable that takes on a 'Yes' for cars with gas mileage above the median, and a 'No' for cars with gas mileage below the median.
+
+
+```{r}
+data <-data %>%
+  mutate(
+    med_g = case_when(
+      mpg<=median(mpg) ~ "No",
+      mpg>median(mpg) ~ "Yes"
+    ),
+    med_g = factor(med_g)
+  ) %>%
+  select(-mpg)
+```
+
+
+Part b: Fit a support vector classifier to the data with various values of cost, in order to predict whether a car gets high or low gas mileage. Report the cross-validation errors associated with different values of this parameter. Comment on your results. Note you will need to fit the classifier without the gas mileage variable to produce sensible results.
+
+We will use the caret package to divide the data into testing and training sets
+
+```{r}
+inTrain <- createDataPartition(y = data$med_g, p=0.8, list=FALSE)
+
+train_data <- data[inTrain,]
+test_data<- data[-inTrain, ]
+```
+
+Initialize the trainControl
+
+```{r}
+tr_control <- trainControl(method = "cv", number = 10, classProbs = TRUE, summaryFunction = twoClassSummary, savePredictions = TRUE)
+```
+
+Create a grid of vales for the tuning parameter C
+
+```{r}
+tGrid <- expand.grid(C=c(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 2, 5, 10))
+```
+
+Estimate the SVM Model
+
+```{r}
+model_svm <-train(med_g ~ ., data = train_data, method = "svmLinear", tuneGrid = tGrid, trControl = tr_control, metric = "ROC", preProcess = c("center", "scale"))
+model_svm
+```
+
+Check performance of the linear model: This is really important. There is a module for chapter 9 which goes over how to translate the results of your confusion matrix again but in more detail!
+
+```{r}
+pred_model_svm <- predict(model_svm, newdata = test_data)
+confusionMatrix(pred_model_svm, test_data$med_g)
+```
+
+Part c: Now repeat (b), this time using SVMs with radial and polynomial basis kernels, with different values of gamma and degree and cost. Comment on your results.
+
+create a range of values for sigma and C
+
+```{r}
+rGrid <- expand.grid(C = c(0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5), sigma = c(1e-3, 1e-2, 1e-1))
+```
+
+Model with Radial Kernel
+
+```{r}
+model_rad <- train(med_g ~., data = train_data, method ="svmRadial", tuneGrid = rGrid, trControl = tr_control, metric = "ROC", preProcess=c("center", "scale"))
+model_rad
+```
+
+Check performance of the radial kernel model
+
+```{r}
+pred_model_rad <- predict(model_rad, newdata = test_data)
+confusionMatrix(pred_model_rad, test_data$med_g)
+```
+
+Model with polynomial Kernel
+
+```{r}
+model_poly <- train(med_g ~., data = train_data, method ="svmPoly",  trControl = tr_control, metric = "ROC", preProcess=c("center", "scale"))
+model_poly
+```
+
+Check performance of the polynomial model
+
+```{r}
+pred_model_poly <- predict(model_poly, newdata = test_data)
+confusionMatrix(pred_model_poly, test_data$med_g)
+```
+
+Compute ROC curves to compare the models using MLeval package
+
+```{r}
+plot_comp <- evalm(list1 = list(model_svm, model_rad, model_poly), gnames = c("Linear SVC", "Radial SVM", "Polynomial SVM"), plot="r")
+```
+
+So what is the actual output here? Well lets look at the pred_model_poly object..
+
+```{r}
+
+```
+
+
+For some clarity on what just happened: We can use the functions `bind_cols()` and `inner_join` to actually see what the labeling scheme ends up being on our actual testing data. A version of this works with any type of modeling.
+
+
+````{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
