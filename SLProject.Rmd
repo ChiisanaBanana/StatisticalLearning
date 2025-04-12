@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Project: Mass Murder Statistics"
 output: html_notebook
 author: "Halan Badilla Osorio"
 ---
@@ -16,15 +16,26 @@ library(ggplot2)
 library(maps)
 library(mapproj)
 library(usmap)
+library(ISLR2)
+library(factoextra)
+library(dplyr)
+library(hexbin)
 ```
 
 ```{r}
-setwd("C:/Users/halan/Desktop/FPU/Spring2025/StatisticalLearning")
+setwd("C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning")
 
 incidents <- read.csv("mass_killing_incidents_public.csv")
 offenders <- read.csv("mass_killing_offenders_public.csv")
 victims <- read.csv("mass_killing_victims_public.csv")
 weapons <- read.csv("mass_killing_weapons_public.csv")
+```
+
+```{r}
+view(incidents)
+view(offenders)
+view(victims)
+view(weapons)
 ```
 
 DATA: Mass Killing Database 2006 - Present (AS OF MARCH 15th 2025)
@@ -107,32 +118,95 @@ unique(incidents$situation_type)
 
 ```
 Here is a quick diagram of the US (Excluding Alaska and Hawaii as it's not properly fitted) that showcases where all the incidents took place. The plan is for me to eventually also turn this into a heat map to give a better gauge as when there are multiple like this it is difficult to showcase how much there is due to overlap. I am also attempting two different ways of showing the data points. Eventually I'll figure out which would be the most effective method.
-
-
 ```{r}
-testSF <- st_as_sf(incidents, coords = c("longitude", "latitude")) %>%
-  st_set_crs(st_crs(4326))
+varI <- incidents %>%
+  select(c(longitude, latitude, firstcod, situation_type, location, num_victims_killed, num_victims_injured)) %>%
+  rename(lon = longitude) %>%
+  rename(lat = latitude)
 
-map <- map_data("state")
+varI
 
-ggplot(testSF) +
-  geom_sf(aes(color = situation_type))
+transformedData <- usmap_transform(varI)
 ```
 
 ```{r}
+plot_usmap() + geom_sf(
+  data = transformedData,
+  aes(color = firstcod, size = num_victims_killed),
+  alpha = 0.8) +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+plot_usmap() + geom_sf(
+  data = transformedData,
+  aes(color = location),
+  alpha = .8) +
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+plot_usmap() + geom_sf(
+  data = transformedData,
+  aes(color = situation_type),
+  alpha = 0.8) +
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+# Getting a count of the incidents per state
 stateIncidents <- incidents %>%
   count(state)
+
+# Setting a fill color variable dependent on the number of incidents
+stateIncidents <- stateIncidents %>%
+  mutate(fillColor = ifelse(n>=40, "40+", ifelse(n>=20, "20-39", "0-19")))
 ```
 
 Here is a bar graph statistic showcasing all of the incidents from the data set and showing them from most to least in a bar graph form. From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occuring) locations in the US. Florida being an honorable mention for fourth place. From here on I could also then further test to check the amount of victims, whilst this graph shows the most mass killings in occurence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
 
 ```{r}
-ggplot(stateIncidents, aes(x = reorder(state, +n), y = n)) +
-  geom_bar(stat = 'identity', width = 0.8) +
-  theme(
-    axis.text.y = element_text(size = 7, hjust = 1)) +
+# Creating the graph and organizing by amount
+ggplot(stateIncidents, aes(x = reorder(state, +n), y = n, fill = fillColor)) + 
+  geom_bar(stat = 'identity', width = 0.8) + 
+  scale_fill_identity() +
+  scale_fill_manual(values = c("0-19" = "#0a6f97", "20-39" = "#5c0a97", "40+" = "#970a0c")) +
+  theme(axis.text.y = element_text(size = 7, hjust = 1)) +
+  labs(title = "Total Incidents Per State", x = "States", y = "Amount of Incidents") +
   coord_flip()
 ```
+```{r}
+# Getting a sum of the amount of both victims killed and injured per state
+deadlynessPerState <- incidents %>%
+  group_by(state) %>%
+  summarize(totalDeaths = sum(num_victims_killed), totalInjured = sum(num_victims_injured))
+
+# Now applying a manual fill variable to be able to apply to the graph later
+deadlynessPerState <- deadlynessPerState %>%
+  mutate(fillColorDeath = ifelse(totalDeaths>=200, "200+", ifelse(totalDeaths>=100, "100-199", "0-99")),
+         fillColorInjury = ifelse(totalInjured>=200, "200+", ifelse(totalDeaths>=100, "100-199", "0-99")))
+```
+
+```{r}
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalDeaths), y = totalDeaths)) +
+  geom_bar(stat = 'identity', width = 0.8) +
+  scale_fill_manual(values = c("0-99" = "#0a6f97", "100-199" = "#5c0a97", "200+" = "#970a0c")) +
+  theme(axis.text.y = element_text(size = 7, hjust = 1)) +
+  labs(title = "Total Victim Deaths Per State", x = "States", y = "Amount of Deaths") +
+  coord_flip()
+
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalInjured), y = totalInjured)) +
+  geom_bar(stat = 'identity', width = 0.8) +
+  scale_fill_manual(values = c("0-99" = "#0a6f97", "100-199" = "#5c0a97", "200+" = "#970a0c")) +
+  theme(axis.text.y = element_text(size = 7, hjust = 1)) +
+  labs(title = "Total Injured Victims Per State", x = "States", y = "Amount of Injured") +
+  coord_flip()
+```
+
+
 ```{r}
 ggplot(weapons, aes(x = weapon_type)) +
   geom_bar(width = 0.8)
@@ -190,3 +264,11 @@ Discussion:
 My general impression on this data set is that while it is very interested, at least for me, it does pose the challenge of attempting to do any sort of predictions. A lot of this data is simply fact but because of the nature of the data I cannot seem to do any sort of time series data as the dates could be considered as continuous but the situations are separate and not linked together.
 
 Regarding the type of models, I'm thinking of maybe using a type of linear regression model to see if maybe there is any correlation with certain features to determine/predetermine the potential lethality of a situation based on the information it has given us. This would be tricky as things like race and age are too broad and other features like situation_type are generally hard to gague before the situation has already escalated. That said I'll attempt to at least see what I would be able to predict like maybe what the odds are of survival with specific body types (age, sex, race, etc.) have in their respective situations. This could be done with the usage of linear regression. 
+
+```{r}
+fullMerged = 0
+fullMerged <- full_join(incidents, offenders, by = "incident_id")
+fullMerged <- full_join(fullMerged, victims, by = "incident_id")
+fullMerged <- full_join(fullMerged, weapons, by = "incident_id")
+```
+

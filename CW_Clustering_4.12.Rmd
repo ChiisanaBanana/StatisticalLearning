@@ -1,0 +1,121 @@
+---
+title: "Clustering Lab"
+output: html_notebook
+---
+
+
+# Libraries
+
+```{r}
+library(ISLR2)
+library(factoextra)
+library(ggplot2)
+```
+
+
+```{r}
+data(iris)
+head(iris)
+```
+
+
+# K-means Clustering
+
+Since we are wanting to work with numerical data, we want to drop the Species column
+```{r}
+iris_Num <- iris[,-5]
+```
+
+Next, we can use the `kmeans()` function to run k-means clusters with k = 2 groups
+```{r}
+K_Iris <- kmeans(iris_Num, centers = 2)
+```
+
+```{r}
+K_Iris$cluster
+```
+
+NOTE: we can run these over and over and we will get different results every time because it is random! 
+
+```{r}
+fviz_cluster(K_Iris, data = iris_Num,
+             palette = c("pink", "#E7B800"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             ) 
+```
+
+NOW, we can go back and use different Ks to see what we got. 
+NOTE: the big Circle and big Triangle are the centroids
+
+```{r}
+K_Iris$centers
+```
+
+Neat trick:
+
+Sometimes I want to know more about how these were clustered, so I might combine the data sets to make a new data set
+
+```{r}
+MIX <- bind_cols(iris, K_Iris$cluster)
+```
+
+```{r}
+table(MIX$...6, MIX$Species)
+```
+
+Here is a neat little table that gives you an idea of how the clustered ended up by species, which might be a good indicator of how well your clusters worked.
+
+# Hierarchical Clustering
+
+```{r}
+#Type dist to see what the purpose is in this clustering method
+
+```
+
+
+```{r}
+dis <- dist(iris_Num)
+```
+
+Now complete hierarchical clustering: 
+
+```{r}
+Complete <- hclust(dis, method = 'complete')
+plot(Complete, main = "Complete Linkage", cex = 0.1)
+```
+
+
+NOW lets standardize the data and see how that might have changed things:
+```{r}
+Standard_iris_Num <-  scale(iris_Num, center = T, scale = T) #standardizing
+Standard_Complete <- hclust(dist(Standard_iris_Num), method = "complete") #new cluster
+plot(Standard_Complete, main = "Standardized Complete Linkage", cex = 0.1) #plotting
+rect.hclust(Standard_Complete, k=3, border=2:5) #making clusters of k=3 visually
+```
+
+Of course we can do all this with different linkages:
+
+Single:
+
+```{r}
+Standard_Single <- hclust(dist(Standard_iris_Num), method = "single") #new cluster
+plot(Standard_Single, main = "Standardized Single Linkage", cex = 0.1) #plotting
+```
+
+Average:
+
+```{r}
+Standard_Average <- hclust(dist(Standard_iris_Num), method = "average") #new cluster
+plot(Standard_Average, main = "Standardized Average Linkage", cex = 0.1) #plotting
+```
+
+
+
+
+
+
+
+
+

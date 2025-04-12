@@ -1,0 +1,146 @@
+# Chapter 01
+
+## Feature Engineering and Selection (by Kuhn and Johnson)
+
+Main reference: see <http://www.feat.engineering/>
+
+```{r}
+# ------------------------------------------------------------------------------
+# Feature Engineering and Selection: A Practical Approach for Predictive Models
+# by Max Kuhn and Kjell Johnson
+# Code for Section 1.1 at
+# https://bookdown.org/max/FES/intro-intro.html#a-simple-example
+#
+# ------------------------------------------------------------------------------
+# 
+# Code requires these packages: 
+library(caret)
+library(tidymodels)
+library(ggthemes)
+```
+
+## EDA
+
+Create sample data from Chapter 01:
+
+```{r}
+# Create example data ----------------------------------------------------------
+data(segmentationData)
+```
+
+View/inspect the dataframe to get a sense of how it looks:
+
+```{r}
+#View(segmentationData)
+```
+
+Note: one could use the `skimr` package to compute summary statistics as well: 
+
+```{r}
+
+```
+
+
+
+**Split the dataset**
+This dataframe comes with a label predefined indicating if a sample is used for testing or training.
+
+
+```{r}
+# rename some predictors
+# segmentationData
+
+```
+
+Get training/testing data: 
+
+```{r}
+# define training data
+
+
+# define testing data
+
+```
+
+
+
+**Prepare to train a model**
+
+Simple example of logistic regression using natural units (this uses functions from the `caret` package to train models)
+
+```{r}
+# Do analysis in natural units -------------------------------------------------
+
+```
+
+
+A first plot of: 
+
+```{r}
+
+```
+
+
+## Modeling
+
+
+Train model using natural terms: 
+
+
+```{r}
+
+```
+
+Run some predictions on testing data
+
+```{r}
+
+```
+
+
+
+Create the ROC plot
+
+```{r}
+
+```
+
+## Refine the Model
+
+Analysis on transformed data:
+
+```{r}
+# Analysis of transformed data -------------------------------------------------
+
+```
+
+
+Get predictions in testing dataset using refined model:
+
+```{r}
+
+```
+
+Generate plot that uses transformed predictors:
+
+```{r}
+
+```
+
+## Model Comparison 
+
+Combined ROC plots: 
+
+
+```{r}
+# Combine dataframe for plot -------------------------------------------------------------
+
+```
+
+Reproduce plot from FES book
+
+```{r}
+# https://bookdown.org/max/FES/a-simple-example.html#fig:intro-natural
+
+```
+

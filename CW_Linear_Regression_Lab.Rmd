@@ -1,9 +1,7 @@
 ---
-title: 'Ch 3: Linear Regression Lab'
-author: "Halan Badilla"
-output:
-  html_document:
-    df_print: paged
+title: "Ch 3: Linear Regression Lab"
+author: "Halan Badilla" 
+output: html_notebook
 ---
 
 # Library
@@ -20,7 +18,7 @@ Download the _Advertising.csv_ file from canvas in this weeks module and load th
 
 ```{r}
 #Load the advertising data
-setwd("C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning")
+setwd("C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning")
 SalesData <- read.csv("Advertising.csv")
 
 ```

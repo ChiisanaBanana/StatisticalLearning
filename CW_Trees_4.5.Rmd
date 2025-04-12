@@ -1,0 +1,378 @@
+---
+title: "On Trees 🌳"
+output: html_notebook
+---
+
+# Libraries:
+
+```{r}
+library(tree) # To construct classification and regression trees
+library(ISLR2)
+library(tidyverse)
+library(caret)
+library(rpart.plot)
+library(randomForest)
+library(gbm)
+```
+
+
+# Regression Trees:
+
+ Using the Boston data set: A data set containing housing values in 506 suburbs of Boston.
+ Our goal here is to ultimately predict house value (medv) based on the other features: crime, zones, industry,near river, nitrogen oxides concentration, number of rooms, proportion of old homes, distance from Boston centers, accessability to highway, tax rate, pupil-teacher ratio, and percent lower status of population.
+```{r}
+set.seed(1234)
+data<-Boston
+head(data)
+```
+
+Split the data into training and test data
+
+```{r}
+intrain<-createDataPartition(y=data$medv, p=0.7, list=FALSE)
+train_data <-data[intrain, ]
+test_data <-data[-intrain, ]
+```
+
+
+Create a regression tree using the training data
+Note: remember the function is: function(dependent ~ independents, data) if you add '.' next to '~' then you are suggesting that all other variables are used.
+
+```{r}
+reg_tree<-tree(medv ~ ., train_data)
+summary(reg_tree)
+```
+
+The above output indicates that only 4 variables have been used in constructing the tree: lstat, rm, dis, nox. We can see that there are 7 terminal nodes. Residual mean deviance is 12.26 where residual mean deviance is the average deviance of the residuals (the differences between observed and predicted values) across all observations in the dataset. Smaller values indicate a better fit.
+
+Now, we plot:
+
+```{r}
+plot(reg_tree) #This just provides the framework
+```
+Note: The argument pretty = 0 instructs R to include the category names for any qualitative predictors
+(I played around with it some though and nothing really happens so maybe do some research there - I've included it because it seems standard)
+```{r}
+plot(reg_tree)
+text(reg_tree, pretty = 0) #must include text() for this to work
+```
+
+
+Remember: The variable lstat measures the percentage of individuals with lower socioeconomic status, 
+rm corresponds to the average number of rooms, dis refers to distance from Boston centers and nox is nitrogen oxides concentration - which basically amounts to measuring air pollution.
+
+The tree indicates that when there is a lower percentage of lower status population, housing is more expensive. then it can be more expensive with more rooms or when closer to Boston centers with those closest being most expenive and those farther but with more rooms being more expensive than those with less rooms. If the lstat percent is higher, then the price indicator is dependent on pollution.
+
+```{r}
+reg_tree_prune <- cv.tree(reg_tree, K = 7 ) # k is the number of fold in the cv
+plot(reg_tree_prune$size, reg_tree_prune$dev, type = "b")
+```
+
+The plot above basically indicates that the tree works best with 7 nodes, this makes sense but also defeats the purpose of trying to prune it SO we are going to use 5 to show what is happening.
+
+```{r}
+reg_tree_pruned<-prune.tree(reg_tree, best = 5)
+plot(reg_tree_pruned)
+text(reg_tree_pruned, pretty=0)
+```
+
+When we trim the tree down to 5 nodes, we see that nox is dropped and we are just basing our decisions on lstat, rooms and distance from center.
+
+We use the unpruned tree to make predictions on the test dataset
+
+```{r}
+reg_yhat<-predict(reg_tree, test_data)
+plot(reg_yhat, test_data[, 13])
+abline(0, 1)
+```
+
+The plot above is just showing the trend line for 
+
+Compute the test MSE
+
+```{r}
+mean((reg_yhat - test_data[, 13])^2)
+```
+
+NOTE: The test set MSE associated with the regression tree is 18.05392 here. The square root of the MSE is therefore around 4.24, indicating that this
+model leads to test predictions that are (on average) within approximately
+$4,240 of the true median home value for the census tract. (This was better than your textbooks results 💵)
+
+
+Remember we alrady partitioned the data earlier, but you would normal do that.
+
+
+Set up Cross-validation:
+
+```{r}
+reg_control <-trainControl(method = "cv", number = 5) #using k = 5 folds
+```
+
+
+Model a regression tree
+```{r}
+reg_tree_1 <-train(medv~ . , data = train_data, method="rpart", trControl = reg_control)
+```
+
+
+```{r}
+reg_tree_1
+```
+
+Plot the pruned tree
+
+```{r}
+rpart.plot(reg_tree_1$finalModel)
+```
+
+Find the MSE on the test data
+
+```{r}
+reg_yhat_1 <- predict(reg_tree_1, test_data)
+plot(reg_yhat_1, test_data[, 13])
+abline(0,1)
+```
+
+```{r}
+mean((reg_yhat_1 - test_data[, 13])^2)
+```
+
+
+
+# Classification Trees
+
+We will use the Carseats dataset. A simulated data set containing sales of child car seats at 400 different stores with the following 11 variables
+
+Sales - Unit sales (in thousands) at each location
+
+CompPrice - Price charged by competitor at each location
+
+Income -Community income level (in thousands of dollars)
+
+Advertising -Local advertising budget for company at each location (in thousands of dollars)
+
+Population - Population size in region (in thousands)
+
+Price Price company charges for car seats at each site
+
+ShelveLoc - A factor with levels Bad, Good and Medium indicating the quality of the shelving location for the car seats at each site
+
+Age - Average age of the local population
+
+Education - Education level at each location
+
+Urban - A factor with levels No and Yes to indicate whether the store is in an urban or rural location
+
+US - A factor with levels No and Yes to indicate whether the store is in the US or not
+
+```{r}
+CSeats <-Carseats
+head(CSeats)
+```
+
+Sales is a continuous variable and we will recode it as a binary variable. Create a binary variable High that takes yes if sales exceed 8 and no otherwise
+
+```{r}
+CSeats$High<- factor(ifelse(CSeats$Sales<=8, "No", "Yes"))
+```
+
+
+We will fit a classification tree and use the summary function to check the internal nodes, terminal nodes and the training error rate.
+
+```{r}
+class_tree <-tree(High ~ . -Sales, CSeats)
+summary(class_tree)
+```
+
+Plot the tree using the plot() function. We use the pretty=0 argument to include category names for qualitative predictors.
+
+```{r}
+plot(class_tree)
+text(class_tree, pretty=0, cex = 0.5) # cex is character expansion - controls text size
+```
+
+Let us split the data into training and test data to evaluate the performance of the tree.
+
+
+```{r}
+intrainC<-createDataPartition(y=CSeats$High, p=0.5, list=FALSE)
+train_dataC <-CSeats[intrainC, ]
+test_dataC <-CSeats[-intrainC, ]
+train_dataC<-select(train_dataC, -Sales)
+test_dataC<-select(test_dataC, -Sales)
+```
+
+
+```{r}
+class_tree1<-tree(High ~ ., train_dataC)
+summary(class_tree1)
+```
+
+Plot the tree
+
+```{r}
+plot(class_tree1)
+text(class_tree1, pretty=0, cex = 0.5)
+```
+
+```{r}
+class_tree1_pred <- predict(class_tree1, test_dataC, type="class")
+table(class_tree1_pred, test_dataC$High)
+```
+
+```{r}
+(97+49)/200 #ACCURACY
+```
+
+## Using the caret package and rpart method
+
+```{r}
+class_tree2 <- train(High ~ ., data = train_dataC, method = "rpart")
+class_tree2
+```
+
+We can find the pruned tree using rpart.plot
+
+```{r}
+rpart.plot(class_tree2$finalModel)
+```
+
+Use the test data to predict
+
+```{r}
+class_tree2_pred<-predict(class_tree2, test_dataC)
+confusionMatrix(class_tree2_pred, test_dataC$High)
+```
+
+When you are using k-fold cross-validation, you use the same method as above except you add a control term.
+
+# Bagging and Random Forest
+
+
+We are going to use the boston data again!! Remember we called it 'data' in the regression portion..
+
+Also,  remember that we already partitioned the data!
+
+## Bagging
+
+```{r}
+bag_boston <- randomForest(medv ~ ., data = train_data, mtry=12, importance = TRUE)
+bag_boston
+```
+
+The argument mtry=12 indicates that all 12 predictors should be considered for each split of the tree - in other words bagging should be done. basically, 'mtry' controls the number of variables randomly sampled as candidates at each split when building each individual tree in the random forest. In this case, mtry = 12 means that at each split, the algorithm will randomly select 12 variables from the available set of predictors to consider for splitting the node. A higher value of mtry typically increases the randomness of the trees and can improve model performance.
+
+Checking performance!
+
+```{r}
+y_hat_boston<-predict(bag_boston, test_data)
+plot(y_hat_boston, test_data[, 13])
+abline(0,1)
+```
+
+
+```{r}
+mean((y_hat_boston-test_data[,13])^2)
+```
+Remember our last value was ~18, now we have ~9 which gives us a root of ~3, this is comparatively better!
+
+We can change the number of trees by using the 'ntree' argument.
+
+```{r}
+bag_boston_again <- randomForest(medv ~ ., data = train_data, mtry=12, importance = TRUE, ntree=25)
+bag_boston_again
+```
+
+```{r}
+y_hat_boston_again<-predict(bag_boston_again, test_data)
+plot(y_hat_boston_again, test_data[, 13])
+abline(0,1)
+```
+
+```{r}
+mean((y_hat_boston_again-test_data[,13])^2)
+```
+
+NOTE: This result is better but marginally.
+
+## Random Forest
+
+Growing a random forest tree proceeds exactly in the same way, except that we use a smaller value for mtry. By default, randomForest() uses p/3 variables when building a random forest of regression trees and sqrt(p) variables when building a random forest of classification trees.
+
+Let us try a random forest with mtry = 6
+
+```{r}
+rf_boston <- randomForest(medv ~ ., data = train_data, mtry=6, importance = TRUE, ntree=25)
+rf_boston
+```
+
+```{r}
+yhat_rf_boston <- predict(rf_boston, test_data)
+plot(yhat_rf_boston, test_data[,13])
+abline(0,1)
+```
+
+```{r}
+mean((yhat_rf_boston-test_data[,13])^2)
+```
+
+Now our result is even better!
+
+We can use the importance() function to see the importance of each variable
+
+```{r}
+importance(rf_boston)
+```
+
+```{r}
+varImpPlot(rf_boston)
+```
+
+This would be how you visualize the importance of your variables. From above we can see that lstat and rm are the most important. Previously, we were able to see this in the simple pruned decision tree!
+
+# Boosting
+
+Still working in the Boston data set
+
+
+We will use the gbm package and the Boston dataset to apply boosting:
+
+gbm has four tuning parameters
+
+- n.trees (# of Boosting Iterations)
+- interaction.depth (Max Tree Depth i.e. the number of splits in each tree d)
+- shrinkage parameter (typically 0.01 or 0.001 and if nothing specified gbm uses a default of 0.001)
+- n.minobsinnode (Minimum Terminal Node Size)
+
+```{r}
+boost_model <- gbm(medv ~., data = train_data, distribution="gaussian", n.trees = 5000, interaction.depth = 4)
+summary(boost_model)
+```
+
+Based on the relative influence obtained above, we can plot the marginal effects of the most influential variables using partial dependence plots (PDPs). You can learn more about PDPs here and here.
+
+```{r}
+plot(boost_model, i="rm")
+```
+
+```{r}
+plot(boost_model, i="lstat")
+```
+
+Let us use the test data for prediction
+
+```{r}
+yhat_boost <- predict(boost_model, test_data, n.trees=5000)
+plot(yhat_boost, test_data[, 13])
+abline(0,1)
+```
+
+```{r}
+mean((yhat_boost-test_data[, 13])^2)
+```
+
+ Now we see a result of ~11, still better than ~18 with the original regression tree but not better than using random forest in this instance. This is just an example though.
+
+
+
+
