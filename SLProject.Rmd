@@ -1,0 +1,192 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: "Halan Badilla Osorio"
+---
+
+```{r}
+Sys.setenv(LANG = "en")
+```
+
+
+```{r}
+library(tidyverse)
+library(sf)
+library(ggplot2)
+library(maps)
+library(mapproj)
+library(usmap)
+```
+
+```{r}
+setwd("C:/Users/halan/Desktop/FPU/Spring2025/StatisticalLearning")
+
+incidents <- read.csv("mass_killing_incidents_public.csv")
+offenders <- read.csv("mass_killing_offenders_public.csv")
+victims <- read.csv("mass_killing_victims_public.csv")
+weapons <- read.csv("mass_killing_weapons_public.csv")
+```
+
+DATA: Mass Killing Database 2006 - Present (AS OF MARCH 15th 2025)
+
+Mass Murder for this dataset is defined as "...the intentional killing of four or more victims by any means within a 24-hour period, excluding the death of unborn children and the offender(s).)
+
+This Database is constantly being updated (Was just updated 2 hours ago as of March 16th, 2025 at 12:50PM) and I would say is very trustworthy. The contact details for this Database is Justin Myers. Justin Myers is a veteran journalist for "The Associated Press", they are also working with Northeastern University's James Alan Fox whomst is also a contact.
+
+
+
+Features(Incident [19 Columns x 615 Rows]):
+
+<span style="color:red">Red</span> = Categorical | <span style="color:green">Green</span> = Numerical
+
+- <span style="color:red">incident_id</span>: ID of incident
+- <span style="color:green">date</span>: Date of incident
+- <span style="color:red">city</span>: City/Town name
+- <span style="color:red">state</span>: State postal code
+- <span style="color:green">num_offenders</span>: Number of offenders
+- <span style="color:green">num_killed</span>: Number of victims killed
+- <span style="color:green">num_injured</span>: Numnber of victims injured
+- <span style="color:red">firstcod</span>: First cause of death
+- <span style="color:red">secondcod</span>: Second cause of death
+- <span style="color:red">if_assault_rifle</span>: Whether a rifle was used
+- <span style="color:red">type</span>: Type of incident (ie. Family, Felony, Public, etc.)
+- <span style="color:red">situation_type</span>: Type of situation (ie. Arson, Drug Trade, Family Issue, etc.)
+- <span style="color:red">location_type</span>: Type of location (ie. Commercial/Retail/Entertainment, Government/Transit, House of worship, etc.)
+- <span style="color:red">location</span>: Location (ie. Bar/Club/Restaurant, College, Commercial/Retail, etc.)
+- <span style="color:green">longitude</span>
+- <span style="color:green">latitude</span>
+- <span style="color:red">county</span>: County associated with coordinates
+- <span style="color:green">geocode</span>: FIPS geocode of location
+- narrative: Description of incident
+
+
+Features(Victims [6 Columns x 3174 Rows]):
+
+- <span style="color:red">incident_id</span>: ID for incident, used to link the victims data.
+- <span style="color:red">victim_id</span>: ID of the victim, for recording purposes.
+- <span style="color:green">age</span>: Age of the victim.
+- <span style="color:red">race</span>
+- <span style="color:red">sex</span>
+- <span style="color:red">vorelationship</span>: Relationship of victim to the offender
+
+Features(Weapons [5 Columns x 963 Rows]):
+
+- <span style="color:red">incident_id</span>: ID for incident, used to link weapon to incident.
+- <span style="color:red">weapon_id</span>: ID for weapon identification.
+- <span style="color:red">weapon_type</span>: Type of weapon.
+- <span style="color:red">gun_class</span>: Classification of gun (Handgun, Long gun, Unknown gun class, Non-gun)
+- <span style="color:red">gun_type</span>: Type of gun (ie. Handgun, Pistol, Revolver, Rifle, etc.)
+
+Features(Offenders [15 Columns x 788 Rows]):
+
+- <span style="color:red">incident_id</span>: ID of incident, used to connect the 4 data sets.
+- <span style="color:red">offender_id</span>: ID used for classification of offenders (Mostly for multi-offender incidents)
+- <span style="color:red">firstname</span>
+- <span style="color:red">middlename</span>
+- <span style="color:red">lastname</span>
+- <span style="color:red">suffix</span>
+- <span style="color:green">age</span>
+- <span style="color:red">race</span>
+- <span style="color:red">sex</span>
+- <span style="color:red">suicide</span>: Whether the offender commited suicide or not.
+- <span style="color:red">deathcause</span>: What did the offender die by whether it was suicide or killed by a bystander/police
+- <span style="color:red">outcome</span>: What was the legal outcome for the incident (ie. Acquitted, Arrested/Pending trial, Charges dropped, etc.)
+- <span style="color:red">criminal_justice_process</span>: Status of criminal justice process (ie. Arrested/Pending trial, charges dropped, etc.)
+- <span style="color:red">sentence_type</span>: Type of sentence convicted (ie. Acquitted, Awaiting sentencing, Committed, Death sentence etc.)
+- sentence_details: Details about the sentence convicted.
+
+```{r}
+glimpse(incidents)
+```
+
+
+
+
+```{r}
+unique(incidents$situation_type)
+
+```
+Here is a quick diagram of the US (Excluding Alaska and Hawaii as it's not properly fitted) that showcases where all the incidents took place. The plan is for me to eventually also turn this into a heat map to give a better gauge as when there are multiple like this it is difficult to showcase how much there is due to overlap. I am also attempting two different ways of showing the data points. Eventually I'll figure out which would be the most effective method.
+
+
+```{r}
+testSF <- st_as_sf(incidents, coords = c("longitude", "latitude")) %>%
+  st_set_crs(st_crs(4326))
+
+map <- map_data("state")
+
+ggplot(testSF) +
+  geom_sf(aes(color = situation_type))
+```
+
+```{r}
+stateIncidents <- incidents %>%
+  count(state)
+```
+
+Here is a bar graph statistic showcasing all of the incidents from the data set and showing them from most to least in a bar graph form. From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occuring) locations in the US. Florida being an honorable mention for fourth place. From here on I could also then further test to check the amount of victims, whilst this graph shows the most mass killings in occurence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
+
+```{r}
+ggplot(stateIncidents, aes(x = reorder(state, +n), y = n)) +
+  geom_bar(stat = 'identity', width = 0.8) +
+  theme(
+    axis.text.y = element_text(size = 7, hjust = 1)) +
+  coord_flip()
+```
+```{r}
+ggplot(weapons, aes(x = weapon_type)) +
+  geom_bar(width = 0.8)
+```
+
+With this Violin plot (+ Boxplot) we can see the general distribution of the victims as well as the medians. Generally it seems that females and males are both on average not too dissimilar but this is without knowing the exact amount of numbers. Proportionally however, the age of which they died does not seem to matter despite the sex. The unknown seems to be cases which the bodies were recovered but maybe not able to be identified as these cases have little to no information to them
+
+```{r}
+ggplot(victims, aes(x = sex, y = age, fill = sex)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.4) +
+  geom_jitter(shape = 16, position=position_jitter(0.1), alpha = 0.2)
+```
+
+
+I specifically remember this occurrence, I recall it being everywhere on the news and so I tested out the ID and seeing how well I could extract the data. 
+
+```{r}
+
+incidentsFL <- incidents %>%
+  filter(state == "FL")
+
+incidentsFL
+
+weapons %>%
+  filter(incident_id == 300)
+
+victims %>%
+  filter(incident_id == 300)
+
+offenders %>%
+  filter(incident_id == 300)
+```
+
+
+Here I was checking if there are any other discriminatory attacks against gay people searching through the narratives for the term "gay", surprisingly, out of all the ones in the US only one showed up, which is the same one from above that occurred in Orlando.
+
+```{r}
+# With grepl I can search for specific words in the narrative or any other of the strings of texts that give narratives.
+incidents %>%
+  filter(grepl("gay", narrative))
+
+```
+
+```{r}
+
+```
+
+I would consider this data set to be *relatively* clean. But, there are some things that could be altered for the sake of working with them. For example, there are a lot of NULL cells but due to the type of data I do not plan to remove these rows, I will however probably change them into "N/A" or something of the sort as they are important. There are some features, for example - situation_type, which has "Undetermines" and just flat out Null. Reading through the narratives, my personal belief is that these are most likely incidents in which there was simply no official statement of what type of situation the incident was. This would be a situation in which I would alter the data to officially state something like "Not Stated" 
+
+
+
+Discussion:
+
+My general impression on this data set is that while it is very interested, at least for me, it does pose the challenge of attempting to do any sort of predictions. A lot of this data is simply fact but because of the nature of the data I cannot seem to do any sort of time series data as the dates could be considered as continuous but the situations are separate and not linked together.
+
+Regarding the type of models, I'm thinking of maybe using a type of linear regression model to see if maybe there is any correlation with certain features to determine/predetermine the potential lethality of a situation based on the information it has given us. This would be tricky as things like race and age are too broad and other features like situation_type are generally hard to gague before the situation has already escalated. That said I'll attempt to at least see what I would be able to predict like maybe what the odds are of survival with specific body types (age, sex, race, etc.) have in their respective situations. This could be done with the usage of linear regression. 

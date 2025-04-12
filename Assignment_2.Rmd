@@ -1,0 +1,421 @@
+---
+title: "Assignment 2"
+output: html_notebook
+author: "Halan Badilla Osorio"
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+library(ggplot2)
+library(ggcorrplot)
+library(caret)
+library(MASS)
+library(leaps)
+library(glmnet)
+```
+
+
+# Problem 1:
+
+Using a little bit of algebra, show that $p(x)= \frac{e^{\beta_0 +\beta_1x_1}}{1+e^{\beta_0+\beta_1x_1}}$ is equivalent to $\frac{p(X)}{1-p(X)} = e^{\beta_0+\beta_1x_1}$. In other words, the logistic function representation and logit representation for the logistic regression model are equivalent. Note, if you can't see these equations, use your mouse to hover over them and they should pop up.
+
+![My work](C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/Problem1.JPG)
+
+# Solution:
+
+
+# Problem 2: 
+Suppose we collect data for a group of students in a statistics class with variables X1 =hours studied, X2 =undergrad GPA, and Y = receive an A. We fit a logistic regression and produce estimated coefficient, β0 = −6, β1 = 0.05, β2 = 1.
+(a) Estimate the probability that a student who studies for 40 hours and has an undergrad GPA of 3.5 gets an A in the class.
+
+
+(b) How many hours would the student in part (a) need to study to have a 50% chance of getting an A in the class?
+
+# Solution:
+
+```{r}
+# Betas
+b0 <- -6
+b1 <- 0.05
+b2 <- 1
+
+# Coefficients
+x1 <- 40    # 40 hours studied
+x2 <- 3.5   # Undergrad GPA
+
+logReg1 <- b0 + (b1 * x1) + (b2 * x2)         # Logistic Regression
+answerA <- exp(logReg1) / (1 + exp(logReg1))
+print(answerA)
+```
+```{r}
+p <- 0.5 # 50% chance
+
+logReg2 <- log(p/(1-p)) # Applies the chance
+
+answerB <- (logReg2 - b0 - (b2 * x2)) / b1
+
+print(answerB)
+```
+
+
+# Problem 3:
+14. In this problem, you will develop a model to predict whether a given car gets high or low gas mileage based on the _Auto_ data set.
+
+(a) Create a binary variable, mpg01, that contains a 1 if mpg contains a value above its median, and a 0 if mpg contains a value below its median. You can compute the median using the median() function. 
+
+```{r}
+auto <- read.csv("C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/Auto.csv")
+mpgMedian <- median(auto$mpg)
+auto <- auto %>%
+  mutate(mpg01 = ifelse(mpg>=mpgMedian, 1, 0))
+```
+
+```{r}
+auto
+```
+
+
+(b) Explore the data graphically in order to investigate the association between mpg01 and the other features. Which of the other features seem most likely to be useful in predicting mpg01? Scatterplots and boxplots may be useful tools to answer this question.
+Describe your findings.
+
+```{r}
+# Getting rid of the name column and getting rid of the 5 rows with '?' in horsepower.
+autoNumeric <- subset(auto, select = -name)
+autoNumeric <- subset(autoNumeric, horsepower != '?')
+
+# Viewing the dataset
+view(autoNumeric)
+
+# Transforming the horsepower to now be numeric
+autoNumeric <- transform(autoNumeric, horsepower = as.numeric(horsepower))
+
+# Doube checking that all the classes are actually numeric.
+sapply(autoNumeric, class)
+
+# Numeric Correlation Matrix
+cor(autoNumeric)
+
+# Cool Visual Correlation Matrix that you showed us.
+corr <- round(cor(autoNumeric), 5)
+ggcorrplot(corr)
+```
+
+Going off the correleation matrix, the best bet to predict MPG01 are the negative correlation ones, amount of cylinders, displacement, horsepower, and weight.
+
+```{r}
+# Scatterplot Negative Correlation
+ggplot(autoNumeric, aes(x = mpg01, y = cylinders)) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(title="MPG VS Cylinders", x="MPG", y="Cylinders")
+
+ggplot(autoNumeric, aes(x = mpg01, y = displacement)) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(title = "MPG VS Displacement", x = "MPG", y = "Displacement")
+
+ggplot(autoNumeric, aes(x = mpg01, y = horsepower)) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(title="MPG VS Horsepower", x="MPG", y="Horsepower")
+
+ggplot(autoNumeric, aes(x = mpg01, y = weight)) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(title = "MPG VS Weight", x = "MPG", y = "Weight")
+```
+Furthermore, looking at the negative correlation scatterplots you can see the general trend that anything that if the MPG is above the median then it will generally be on the lower side. Lower amount of cylinders, less displacement, less horsepower and less weight all contribute to having a MPG that is generally higher than the median.
+
+```{r}
+# Scatterplot Positive Correlation
+ggplot(autoNumeric, aes(x = mpg01, y = acceleration)) +
+  geom_jitter(width = 0.1, alpha = 0.5) +
+  labs(title="MPG01 VS Acceleration", x="MPG01", y="Acceleration")
+
+ggplot(autoNumeric, aes(x = mpg01, y = year)) +
+  geom_jitter(width = 0.05, alpha = 0.5) +
+  labs(title = "MPG01 VS Year", x = "MPG01", y = "Year")
+
+ggplot(autoNumeric, aes(x = mpg01, y = origin)) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(title="MPG01 VS Origin", x="MPG01", y="Origin")
+```
+Analyzing the scatterplot for the positive correlation, given that these correlations are less comparitively to the negative ones, some change in the jitter allows you to see the grouping better and there is some sort of slight correlation. Those with higher acceleration and later years (80s+) are more likely to be above the median. Regarding the origins, the plot is very dense for anything below the median and is very likely to be from Origin 1. For anything above, it seems much more likely to be an even split with it being generally much more likely to be from either Origin 1, 2 and 3, with maybe slightly more in favor of Origin 1.
+
+```{r}
+autoNumeric$mpg01 <- as.factor(autoNumeric$mpg01)
+```
+
+```{r}
+autoNumeric
+```
+
+
+```{r}
+# Violin Plot to show Density in Negative
+ggplot(autoNumeric, aes(x = mpg01, y = displacement, fill = mpg01)) +
+  geom_violin(trim=FALSE) +
+  geom_boxplot(width = 0.05, fill = 'white') +
+  theme_classic()
+
+ggplot(autoNumeric, aes(x = mpg01, y = horsepower, fill = mpg01)) +
+  geom_violin(trim=FALSE) +
+  geom_boxplot(width = 0.05, fill = 'white') +
+  theme_classic()
+
+ggplot(autoNumeric, aes(x = mpg01, y = weight, fill = mpg01)) +
+  geom_violin(trim=FALSE) +
+  geom_boxplot(width = 0.05, fill = 'white') +
+  theme_classic()
+```
+
+These Violin plots give us a slightly better insight on the density and medians of the data for the negative correlations. I decided to use this for the negatives only as the correlation between the negative ones is not as drastic but with this we can see better groupings. For the horsepower, displacement and weight, as stated above, there is a much bigger difference with them generally being on the lower end and making them more likely to be above the median.
+
+
+```{r}
+#autoNumeric <- autoNumeric[,-9]
+
+pairs(autoNumeric)
+```
+The pairs shows a clear correlation between mpg, displacement, horsepower, weight and acceleration. All similar things to what the correlation matrix showed.
+
+(c) Split the data into a training set and a test set.
+
+```{r}
+# Split into training and test data.
+set.seed(1)
+
+train <- createDataPartition(autoNumeric$mpg01, p = .70, list = FALSE)
+
+training <- autoNumeric[train, ] # 70% used for training
+testing <- autoNumeric[-train, ] # Remaining used for testing
+```
+
+(d) Perform LDA on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (b). What is the test error of the model obtained?
+
+```{r}
+# Perform LDA on training Data to predict mpg01.
+ldaAN <- lda(mpg01 ~ displacement + horsepower + weight + acceleration, data = training)
+
+ldaPredictions <- predict(ldaAN, newdata = testing)
+
+plot(ldaAN)
+```
+```{r}
+ldaTestError <- mean(ldaPredictions$class != testing$mpg01)
+
+print(ldaTestError)
+```
+
+(e) Perform QDA on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (b). What is the test error of the model obtained?
+
+```{r}
+# Perform QDA
+qdaAN <- qda(mpg01 ~ displacement + horsepower + weight + acceleration, data = training) 
+
+qdaPredictions <- predict(qdaAN, newdata = testing)
+
+qdaTestError <- mean(qdaPredictions$class != testing$mpg01)
+
+print(qdaTestError) 
+```
+I'd like to mention I had to redo this like 4 times because every time I did it the LDA and QDA were identical. I thought I had done something incorrectly, no, I was just simply very unlucky.
+
+(f) Perform logistic regression on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (b). What is the test error of the model obtained?
+
+# Solution:
+
+```{r}
+# Log Regression
+autoLog <- glm(mpg01 ~ displacement + horsepower + weight + acceleration, data = training, family = binomial)   
+logPredictions <- predict(autoLog, newdata = testing, type = "response")
+probPredictions <- ifelse(logPredictions > 0.5, 1, 0)
+logTestError <- mean(probPredictions != testing$mpg01)
+
+print(logTestError)
+```
+
+# Problem 4:
+We now review k-fold cross-validation.
+
+(a) Explain how k-fold cross-validation is implemented.
+
+(b) What are the advantages and disadvantages of k-fold cross-validation
+relative to:
+    i. The validation set approach?
+    ii. LOOCV?
+      Best possible results as it goes through ALL of the potential combinations. LOOCV is an extreme case of k-fold where k = n. The downside to this is that this is the most computationally intensive as it gets exponentially more intensive the more sets of data that exist. 
+
+# Solution:
+
+a) K-fold will divide the dataset into k amount of equal parts and then train the model k-1 amount of times, each time excluding 1 fold which will be the validation test. All the results need to be averaged and then you find the average across all the folds.
+
+b)    Validation Set:
+      There is never a crossover between training and testing set.
+      A big advantage is that the validation set is much easier to run but has higher variance whereas kfold is more computationally intensive as it needs to do many iterations more times and as such reduces variance. 
+      LOOCV:
+      kFold is faster than LOOCV and that's due to LOOCV being a form of kFold, specifically, the best variation. However, the downside is that in LOOCV k = n so k always runs the max amount of times. As such, it is even more so, MUCH more computationally extensive than kFold generally as everytime another n is added the runtime goes up exponentially. That is the biggest drawback, it does have higher variance but it has much lower bias as it gets tested on literally everything. This generally results in LOOCV being the better outcome since you are guaranteed to get the most optimal combination at the cost of computational power.
+
+
+
+
+# Problem 5: 
+From the data in [Miscellaneous Datasets](http://www.stat.ufl.edu/~winner/datasets.html) , obtain the data on “Fibre Diameters and Breaking Strenghs for Nextel 610 Fibres.” (please note that there is a typo on the website. It should be Strength and not Strengh). According to the description available there, the expectation is that the log of breaking strength of the fibre should be negatively and linearly related to diameter. (Note log here means natural log if not specified.)
+
+ (a) Produce a scatter plot of breaking strength against diameter.
+
+ (b) Produce a scatter plot of the log of breaking strength against diameter.
+
+ (c) Produce a scatter plot of the log of breaking strength against the log of diameter.
+
+ (d) Regress breaking strength on diameter.
+
+ (e) Regress the log of breaking strength on diameter.
+
+ (f) Regress the log of breaking strength on the log of diameter.
+
+# Solution:
+
+```{r}
+strengths <- read_table("https://users.stat.ufl.edu/~winner/data/fiber_weibull.dat", col_names = FALSE)
+colnames(strengths) <- c("Break Strength", "Diameter")
+```
+
+```{r}
+summary(strengths)
+```
+```{r}
+ggplot(strengths, aes(`Break Strength`, Diameter)) +
+  geom_point() +
+  labs(title = "(a) Breaking Strength V Diameter")
+```
+```{r}
+ggplot(strengths, aes(log(`Break Strength`), Diameter)) +
+  geom_point() +
+  labs(title = "(b) Log(Breaking Strength) V Diameter")
+```
+
+```{r}
+ggplot(strengths, aes(log(`Break Strength`), log(Diameter))) +
+  geom_point() +
+  labs(title = "(c) Log(Breaking Strength) V Log(Diameter)")
+```
+
+```{r}
+regressA <- lm(`Break Strength` ~ Diameter, strengths)
+
+summary(regressA)
+```
+
+```{r}
+regressB <- lm(log(`Break Strength`) ~ Diameter, strengths)
+
+summary(regressB)
+```
+
+```{r}
+regressC <- lm(log(`Break Strength`) ~ log(Diameter), strengths)
+
+summary(regressC)
+```
+# Problem 6:
+From the data in [Miscellaneous Datasets](http://www.stat.ufl.edu/~winner/datasets.html) , obtain the data on “Variables associated with Permeability and Porosity of Rocks”
+
+ (a) Fit a multiple regression model to predict porosity. Please provide a clean model with only significant variables. Interpret your model results and diagnostics.
+
+ (b) Fit a multiple regression model to predict log(permeability). Please provide a clean model with only significant variables. Interpret your model results and diagnostics.
+
+# Solution:
+
+```{r}
+rockData <- read.table("C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/rock_aquifer.csv")
+rockData
+```
+
+```{r}
+colnames(rockData) <- c("Sample", "Bulk Density", "Porosity", "Log Permeability", "Insoluble Residue", "Total Carbonate", "Grain Length of a-axis", "SD of a-axis length", "Grain Length of b-axis", "SD of b-axis length", "Calcite", "Dolomite")
+
+rockData
+```
+
+Sample:
+1 - Stonehenge Limestone
+2 - Nittany Dolomite
+3 - Axeann Limestone
+4 - Bellefont Limestone
+
+```{r}
+cor(rockData)
+```
+
+```{r}
+regFullRock <- regsubsets(Porosity ~ ., rockData, nvmax = 11)
+summary(regFullRock)
+```
+
+```{r}
+regSum <- summary(regFullRock)
+```
+
+```{r}
+regSum$cp
+
+regSum$bic
+
+regSum$adjr2
+
+# CP 1st
+# BIC 2nd
+# ADJR2 3rd
+```
+
+```{r}
+which.min(regSum$cp)
+which.min(regSum$bic)
+which.max(regSum$adjr2)
+```
+
+Given that all 3 here come out to 7 it shows that there is a pretty big consensus on 7 being the optimal amount of features.
+
+
+
+```{r}
+rockModel1 <- lm(Porosity ~ `Log Permeability` + `Bulk Density` + Calcite + `SD of a-axis length` + `SD of b-axis length` + `Grain Length of a-axis` + `Grain Length of b-axis`, rockData)
+
+summary(rockModel1)
+```
+
+Looking at these results, while they all show some significance, some (SD and Grain) show very similar standard deviation due how correlated they are. This model does capture a decent amount of the variables, the correlation does make it harder to see the impact each variables has individually.
+
+VIF will be used to see how much correlation there is.
+
+```{r}
+vif <- 1/(1-0.6837)
+vif
+```
+3.16 is generally a pretty good amount.
+
+```{r}
+regFullLog <- regsubsets(`Log Permeability` ~ ., rockData, nvmax = 11)
+summary(regFullLog)
+```
+
+```{r}
+regSumLog <- summary(regFullLog)
+regSumLog$cp
+regSumLog$bic
+regSumLog$adjr2
+```
+```{r}
+which.min(regSumLog$cp)
+which.min(regSumLog$bic)
+which.max(regSumLog$adjr2)
+```
+
+```{r}
+permeabilityMod <- lm(`Log Permeability` ~ Porosity + `Insoluble Residue` + `Grain Length of a-axis` + `SD of a-axis length` + `Grain Length of b-axis` + `SD of b-axis length` + Calcite + Dolomite, rockData)
+summary(permeabilityMod)
+```
+I just chose 8 since it was right between the two. That said, 6 could be argued to be better as it showed all having some sort of significance (though sample was a categorical var but it could still mean something) yet with 8 it doesn't show "SD of a-axis length" too have any meaningful significance. Given this was the middle of the 3 tests I still ended up going with this one and I find it to be the most balanced.
+
+```{r}
+1/(1-0.6415)
+```
+Decent VIF, better than the previous one (less multi-coll) but not as good as what is in the solutions. I think it's a drawback I'd take though.

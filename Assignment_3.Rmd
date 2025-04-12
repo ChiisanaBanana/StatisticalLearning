@@ -1,0 +1,272 @@
+---
+title: "Assignment 3"
+output: html_notebook
+author: "[Enter Name Here]"
+---
+
+Put library here. 
+Reminder: Do not install package in the chunk. If you need to install a package do it in the console. You only need to install a package one time.
+
+```{r}
+# Libraries
+Sys.setlocale("LC_ALL","English")
+library(tidyverse)
+library(caret)
+library(leaps)
+library(ISLR2)
+library(ggplot2)
+library(usmap)
+library(dplyr)
+library(ggwordcloud)
+library(tokenizers)
+library(SnowballC)
+library(tidytext)
+```
+
+
+_Reminder: Your Assignment MUST be submitted as an .html file. If you find that you cannot do this then e-mail me and we will work on it._
+
+# Part 1:
+
+In this exercise, we will predict the number of applications received using the other variables in the _College_ data set.
+
+```{r}
+college <- read.csv("C:/Users/halan/Desktop/FPU/Spring2025/Statistical Learning/College.csv")
+summary(college)
+
+newCollege <- college[ , -c(1:2)]
+```
+
+```{r}
+summary(newCollege)
+```
+
+
+(a) Split the data set into a training set and a test set.
+
+```{r}
+trainApps <- createDataPartition(newCollege$Apps, p = 0.7, list = FALSE)
+trainAppsData <- newCollege[trainApps, ]
+testAppsData <- newCollege[-trainApps, ]
+```
+
+(b) Fit a linear model using least squares on the training set, and
+report the test error obtained.
+
+```{r}
+lmCollege <- train(Apps ~ ., data = trainAppsData, method = "lm", metric = "RMSE")
+lmCollegePredictions <- predict(lmCollege, newdata = testAppsData)
+```
+
+```{r}
+lmCollegeRMSE <- RMSE(lmCollegePredictions, testAppsData$Apps)
+lmCollegeRSQ <- R2(lmCollegePredictions, testAppsData$Apps)
+
+data.frame(lmCollegeRSQ, lmCollegeRMSE)
+```
+
+(c) Fit a ridge regression model on the training set, with λ chosen
+by cross-validation. Report the test error obtained.
+
+```{r}
+trainControl <- trainControl(method = "cv", number = 5)
+mygrid <- 10^seq(3, -2, length = 100)
+```
+
+```{r}
+rCollege <- train(Apps ~ ., data = trainAppsData, method = "glmnet", trControl = trainControl, metric = "RMSE", tuneGrid = expand.grid(alpha = 0, lambda = mygrid))
+
+rCollegePredictions <- predict(rCollege, newdata = testAppsData)
+```
+
+```{r}
+rCollegeRMSE <- RMSE(rCollegePredictions, testAppsData$Apps)
+rCollegeRSQ <- R2(rCollegePredictions, testAppsData$Apps)
+
+data.frame(rCollegeRSQ, rCollegeRMSE)
+```
+
+```{r}
+coef(rCollege$finalModel, rCollege$bestTune$lambda)
+```
+
+
+(d) Fit a lasso model on the training set, with λ chosen by cross-validation.
+Report the test error obtained, along with the number
+of non-zero coefficient estimates.
+
+```{r}
+lCollege <- train(Apps ~ ., data = trainAppsData, method = "glmnet", trControl = trainControl, metric = "RMSE", tuneGrid = expand.grid(alpha = 1, lambda = mygrid))
+```
+
+```{r}
+lCollege <- train(Apps ~ ., data = trainAppsData, method = "glmnet", trControl = trainControl, metric = "RMSE", tuneGrid = expand.grid(alpha = 0, lambda = mygrid))
+
+lCollegePredictions <- predict(lCollege, newdata = testAppsData)
+```
+
+```{r}
+lCollegeRMSE <- RMSE(lCollegePredictions, testAppsData$Apps)
+lCollegeRSQ <- R2(lCollegePredictions, testAppsData$Apps)
+
+data.frame(lCollegeRSQ, lCollegeRMSE)
+```
+
+```{r}
+coef(lCollege$finalModel, lCollege$bestTune$lambda)
+```
+
+# Part 2:
+
+Using the _College_ data set again, use the best subset selection, forward subset selection, and backward subset selection methods to predict the number of applications received using the other variables.
+
+```{r}
+bestCollege <- regsubsets(Apps ~ ., newCollege, nvmax = 16)
+bestCollegeSum <- summary(bestCollege)
+bestCollegeSum
+```
+
+```{r}
+bestCollegeF <- regsubsets(Apps ~ ., newCollege, nvmax = 16, method = "forward")
+bestCollegeSumF <- summary(bestCollegeF)
+bestCollegeSumF
+```
+
+```{r}
+bestCollegeB <- regsubsets(Apps ~ ., newCollege, nvmax = 16, method = "backward")
+bestCollegeSumB <- summary(bestCollegeB)
+bestCollegeSumB
+```
+
+```{r}
+data.frame(plot(bestCollege, scale = "bic"), plot(bestCollegeF, scale = "bic"), plot(bestCollegeB, scale = "bic"))
+```
+
+```{r}
+which.min(bestCollegeSum$bic)
+which.min(bestCollegeSumF$bic)
+which.min(bestCollegeSumB$bic)
+```
+
+# Part 3:
+
+Using the _Boston_ data set, use the best subset selection, forward subset selection and backward subset selection methods to predict the per Capita crime rate. 
+
+```{r}
+head(Boston)
+```
+
+```{r}
+bestBoston <- regsubsets(crim ~ ., Boston, nvmax = 12)
+bestBostonSum <- summary(bestBoston)
+bestBostonSum
+```
+```{r}
+bestBostonF <- regsubsets(crim ~ ., Boston, nvmax = 12, method = "forward")
+bestBostonSumF <- summary(bestBostonF)
+bestBostonSumF
+```
+
+```{r}
+bestBostonB <- regsubsets(crim ~ ., Boston, nvmax = 12, method = "backward")
+bestBostonSumB <- summary(bestBostonB)
+bestBostonSumB
+```
+```{r}
+which.min(bestBostonSum$bic)
+which.min(bestBostonSumF$bic)
+which.min(bestBostonSumB$bic)
+```
+
+# Part 4:
+
+Go to this [website](https://r-graph-gallery.com/) and select 2 graphs we have not already discussed in class. For each graph type you choose:
+a) Give its name and its purpose
+
+  Density 2D: This is meant to show the relationship between 2 numerical variables. Similar to a heat map except it will show the density around the points.
+  
+  Wordcloud: This is meant to visually represent text data. Specifically, it shows the most prominent terms by making the most prominent terms stand out. This can be with size, color, both, or anything that makes them distinct. Something to note is that these are criticized that while these are easy to understand, area is not a good metric to understand clearly and also longer words inherently look bigger.
+  
+b) Code an example
+c) Run the code so that I am able to see the graph you've made
+d) Give a short but detailed description of what the graph is showing the viewer
+
+```{r}
+# Using my main project data for this.
+# This is the Density 2D
+
+incidents %>%
+  group_by(state) %>%
+  count(state, sort = TRUE)
+
+californiaIncidents <- incidents %>%
+  filter(state == "CA")
+```
+
+
+
+```{r}
+ggplot(californiaIncidents, aes(longitude, latitude)) +
+  geom_hex(bins = 25) +
+  borders("state", region = "california") +
+  coord_fixed(1.3) +
+  labs(title = "Numbers of Mass Murders in California")
+```
+In this heat map you can a density map depicting the where mass murders have occurred and where they have occurred the most in California. From this I can see that Los Angeles (I'm not surprised) has the most amount of mass murders with a runer up of San Francisco/Contra Costa, that general area being close.
+
+```{r}
+stemList <- incidents$narrative %>%
+  tokenize_words(lowercase = TRUE, strip_punct = TRUE) %>% # Tokenizing
+  unlist() %>% # Unlisting
+  tibble(word = .) %>% # Turning into Table
+  anti_join(get_stopwords()) %>% # Removing Stop Words
+  pull(word) %>% 
+  wordStem() # Stemming
+```
+
+```{r}
+wordAmount <- sort(table(stemList), decreasing = TRUE)
+wordAmount <- data.frame(word = names(wordAmount), frequency = as.numeric(wordAmount))
+```
+
+```{r}
+ggplot(wordAmount, aes(label = word, size = frequency, color = frequency)) +
+  geom_text_wordcloud() +
+  scale_size_area(max_size = 40) +
+  scale_color_gradient(low = "darkblue", high = "blue") +
+  theme_minimal()[3][5]
+```
+I am keeping this simply out of absurdity. Took around 5 minutes to fully do it and it gave me this, probably due to the sheer amount of words (3451) and also the size.
+
+```{r}
+wordAmount2 <- wordAmount %>% # Lowering it to the top 75
+  slice(1:75)
+
+ggplot(wordAmount2, aes(label = word, size = frequency, color = frequency)) +
+  geom_text_wordcloud() +
+  scale_size_area(max_size = 20) + # Messed with this until it fit
+  scale_color_gradient(low = "hotpink", high = "pink") +
+  theme_minimal()[3][5]
+```
+Got this one to work and with pink for your viewing pleasure. As you might expect from a murder database "kill" appears the most, this word cloud shows us the frequency at which words showed up in the narrative of every incident. I'm not sure why some words tokenized weirdly, "polic", "guilti", "famili", regardless you can understand the words. You can however draw conclusions, out of all the mass murders most of them probably occurred with guns, a startling amount occurred in homes, children were somehow related, this can either be due to them being the victims or being part of the narrative of them surviving, etc. From this you can draw *potential* conclusions.
+
+NOTE: Remember to include the libraries required for these graphs. You will have to do a little bit of reading to make these work. Keep in mind that you have a project coming up so try to choose something you think might be interesting. _Feel free to use any data you like for these graphs_
+
+
+# Part 5:
+
+Go to [The Pudding](https://pudding.cool/), select a data story and participate to the end. Then write 1-2 paragraphs which include what the story was about, a list of some visualization methods they used that you liked (at least 2), at least one piece of interesting information you learned AND finally, please tell me if you think there is any bias or if this was an objective description of a story in data science. 
+You can always write more! This is just a minimum.
+
+https://pudding.cool/2017/03/punk/
+
+_Defining Punk_
+
+This article simply comes down to it saying "Punk is whatever you make it out to be because genres are not set in stone and made up in our head"
+For a bit of more specific details it brings up how the genre of punk, and all others in general have evolved and what was once known as something can now potentially be known as something else or how the genres keep expanding so something historically may have not been classified as punk but now it is. In this they specifically hone in on Blink-182 being the epitome of punk. One visualization here that they use is (I think) a correlogram. Where they showcased the percentage of user-created playlists in all of spotify and youtube in 2015 that contain the word punk and contained Blink-182 in it, which was around ~45%. 
+
+The second portion of this was that it then went into what bands where associated with what punk genres the most. Seeing as punk has expanded into a whole slew of different sub genres: 2-Tone, Anarch-Punk, Art-Punk, Beatdown, Bent-edge, blackened-crust, etc... Afterwards, these were brought down to 22. This was done by scouring all playlists and only allowing the sub-genres that have at least 500 playlists. This way any that are too niche don't pervade the list. With this new data they then found out when these genres were coined, this is where what I mentioned earlier about music evolving comes into play. Their solution is essentially that since there is different coining per different genres it comes down to what era you are talking about. Something that was screamo in '91 might now be classified as emo in '93. 
+
+I don't really think there is much bias as this is much more of an informative piece versus them taking a stance. They never made a statement and more so gave a bunch of definitions that allowed the reader to make one on their own or just give different viewpoints. 
+
+I mentioned that this used a correlogram but it also used a bubble graph and an animated lollipop graph (I think?) 

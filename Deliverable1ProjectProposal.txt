@@ -1,0 +1,34 @@
+Intro: 
+I find the topic really interesting just out of a morbid curiosity standpoint. The dataset is mass killings in the US since 2006. Going through this data will help find potential ways to maybe lower your risk given we live in the US. 
+
+In this project I aim to find potential statistics about the murderers themselves as well as the statistics regarding the locations like where has had the most mass killings and if there is a way to predict where is most likely to have more occur.
+
+Hopefully with these predictions you could be more mindful of where you are but it also comes from a point of curiosity of just wanting to know more about these things.
+
+Objectives:
+I'd like to be able to predict whom is at the highest risk of being in peril as well as where, location wise, whether this is specific type of location or state, etc, will put you in more danger. 
+
+Additionally, I'd also like to get more statistics and find out more about generally what's been going on in the US. Plenty of mass killings occur but a lot of them don't really become national news. With this dataset I'll be able to learn more about them.
+
+
+Methodology:
+With how I plan to tackle the project, I'd say pretty standard stuff. First I'll visualize the data in some way, even just a minor way to be able to read through the data and get a general idea of what it has to offer. From there I would continue to clean it up for my objectives and then start predicting models. Depending on whether I need all the variables is something I'll  need to also assess.
+
+Tools: Best Subset (I don't think it's enough data that it'll be impossible), I'll also do Ridge and Lasso to check any differences. From there I'll see if I can normalize the data (I don't think I can from a quick glimpse) and then apply whatever type of model I'll need to analyze it, (LDA, QDA, etc)
+
+Software: R, if I feel fancy I may try out visualization with Tableau.
+
+Timeline: I'll try to get most of the inital cleaning and basic visualization by end of march and finish most of the project by Mid April is my hope.
+
+Deliverables: I'm thinking of a report, I'll try to make it professional, maybe IEEE format.
+
+Success: Honestly, if I even get something working. Whether it supports any initial ideas or not I do not really care. I would like to learn more about this topic but my success criteria is fully learning what I'm using in this project. IE: all the training models, how to use the tools, etc.
+
+Potental Challenges: Cleaning and the data is a little rough, definitely not tidy.
+
+Limitations: Missing variables, slighty misundetstanding with what they mean with certain variables (It is explained but some I'm not sure about like "secondcod")
+
+Summary: I am going to analyze the "Mass Killings in America 2006-Present) dataset and attempt to predict whom is at the highest risk as well as location. I'll find and visualize statistics for general audience to more easily showcase the data.
+
+Call to Action: I'm not sure what I'm supposed to put here. I do want to do well in this simply for the sake of learning my career field. I like taking projects seriously since I find it is the best way for me to learn.
+
