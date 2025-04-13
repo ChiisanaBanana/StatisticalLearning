@@ -1,4 +1,4 @@
 README file
-- Data Dictionary
-- Where you got it from
-- Any other relevant Info
+- Data: All data used in the project + README
+- Presentation: Powerpoint that showcases all the information I gathered.
+- Project: .rmd + .html files

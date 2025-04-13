@@ -1,0 +1,379 @@
+---
+title: "Mass Murder Project"
+output: html_notebook
+author: "Halan Badilla Osorio"
+---
+
+```{r}
+Sys.setenv(LANG = "en")
+```
+
+
+```{r}
+# All libraries. I don't think I ended up using them all but I don't want to find out which one I'm not using.
+
+library(tidyverse)
+library(sf)
+library(ggplot2)
+library(maps)
+library(mapproj)
+library(usmap)
+library(ISLR2)
+library(factoextra)
+library(dplyr)
+library(hexbin)
+```
+
+```{r}
+# Change working directory to whatever works best for you.
+setwd("C:/Users/halan/Desktop/FPU/Spring2025/StatisticalLearning/STA3241-Project-HalanBadilla-SP25/Data")
+
+incidents <- read.csv("mass_killing_incidents_public.csv")
+offenders <- read.csv("mass_killing_offenders_public.csv")
+victims <- read.csv("mass_killing_victims_public.csv")
+weapons <- read.csv("mass_killing_weapons_public.csv")
+```
+
+Here I open the four data sets that were used. All four are connected with an "incident_id" allowing you to see what information is connected.
+
+```{r}
+# So you can view the tables.
+incidents
+offenders
+victims
+weapons
+```
+
+DATA: Mass Killing Database 2006 - Present (AS OF MARCH 15th 2025)
+
+This project makes use of four data sets which are all connected. All four data sets contain a column named "incident_id", an id which links all of them together to see what information is connected to what.
+
+Mass Murder for this data set is defined using the definition given by the FBI: 
+"...the intentional killing of four or more victims by any means within a 24-hour period, excluding the death of unborn children and the offender(s).)
+
+This Database is constantly being updated (Was just updated 2 hours ago as of March 16th, 2025 at 12:50PM) and is very trustworthy. The main contact for these data sets is Justin Myers. Justin Myers is a veteran journalist for "The Associated Press", they are also working with Northeastern University's James Alan Fox whom is also a contact.
+
+Features(Incident [19 Columns x 615 Rows]):
+
+<span style="color:red">Red</span> = Categorical | <span style="color:green">Green</span> = Numerical
+
+- <span style="color:red">incident_id</span>: ID of incident
+- <span style="color:green">date</span>: Date of incident
+- <span style="color:red">city</span>: City/Town name
+- <span style="color:red">state</span>: State postal code
+- <span style="color:green">num_offenders</span>: Number of offenders
+- <span style="color:green">num_killed</span>: Number of victims killed
+- <span style="color:green">num_injured</span>: Numnber of victims injured
+- <span style="color:red">firstcod</span>: First cause of death
+- <span style="color:red">secondcod</span>: Second cause of death
+- <span style="color:red">if_assault_rifle</span>: Whether a rifle was used
+- <span style="color:red">type</span>: Type of incident (ie. Family, Felony, Public, etc.)
+- <span style="color:red">situation_type</span>: Type of situation (ie. Arson, Drug Trade, Family Issue, etc.)
+- <span style="color:red">location_type</span>: Type of location (ie. Commercial/Retail/Entertainment, Government/Transit, House of worship, etc.)
+- <span style="color:red">location</span>: Location (ie. Bar/Club/Restaurant, College, Commercial/Retail, etc.)
+- <span style="color:green">longitude</span>
+- <span style="color:green">latitude</span>
+- <span style="color:red">county</span>: County associated with coordinates
+- <span style="color:green">geocode</span>: FIPS geocode of location
+- narrative: Description of incident
+
+
+Features(Victims [6 Columns x 3174 Rows]):
+
+- <span style="color:red">incident_id</span>: ID for incident, used to link the victims data.
+- <span style="color:red">victim_id</span>: ID of the victim, for recording purposes.
+- <span style="color:green">age</span>: Age of the victim.
+- <span style="color:red">race</span>
+- <span style="color:red">sex</span>
+- <span style="color:red">vorelationship</span>: Relationship of victim to the offender
+
+Features(Weapons [5 Columns x 963 Rows]):
+
+- <span style="color:red">incident_id</span>: ID for incident, used to link weapon to incident.
+- <span style="color:red">weapon_id</span>: ID for weapon identification.
+- <span style="color:red">weapon_type</span>: Type of weapon.
+- <span style="color:red">gun_class</span>: Classification of gun (Handgun, Long gun, Unknown gun class, Non-gun)
+- <span style="color:red">gun_type</span>: Type of gun (ie. Handgun, Pistol, Revolver, Rifle, etc.)
+
+Features(Offenders [15 Columns x 788 Rows]):
+
+- <span style="color:red">incident_id</span>: ID of incident, used to connect the 4 data sets.
+- <span style="color:red">offender_id</span>: ID used for classification of offenders (Mostly for multi-offender incidents)
+- <span style="color:red">firstname</span>
+- <span style="color:red">middlename</span>
+- <span style="color:red">lastname</span>
+- <span style="color:red">suffix</span>
+- <span style="color:green">age</span>
+- <span style="color:red">race</span>
+- <span style="color:red">sex</span>
+- <span style="color:red">suicide</span>: Whether the offender commited suicide or not.
+- <span style="color:red">deathcause</span>: What did the offender die by whether it was suicide or killed by a bystander/police
+- <span style="color:red">outcome</span>: What was the legal outcome for the incident (ie. Acquitted, Arrested/Pending trial, Charges dropped, etc.)
+- <span style="color:red">criminal_justice_process</span>: Status of criminal justice process (ie. Arrested/Pending trial, charges dropped, etc.)
+- <span style="color:red">sentence_type</span>: Type of sentence convicted (ie. Acquitted, Awaiting sentencing, Committed, Death sentence etc.)
+- sentence_details: Details about the sentence convicted.
+
+```{r}
+# Replace empty cells in the situation_type column in incidents with "Unknown"
+
+incidents$situation_type[incidents$situation_type == ""] <- "Unknown"
+```
+
+```{r}
+# Subset for transforming the geo-data
+varI <- incidents %>%
+  select(c(incident_id, longitude, latitude, firstcod, situation_type, location, num_victims_killed, num_victims_injured)) %>%
+  rename(lon = longitude) %>%
+  rename(lat = latitude)
+
+# Transforming geo-data to be usable with usmap
+transformedData <- usmap_transform(varI)
+```
+
+For the sake of visualization, incident 342, the 2017 Las Vegas shooting incident was excluded as it is too much of an outlier to properly visualize information. To see the details, below I have provided the incident so you can see the details.
+
+```{r}
+# So anyone can see the information on that event.
+incidents[incidents$incident_id == 342, ]
+
+# Filtering the observation.
+tempData <- transformedData %>%
+  filter(incident_id != 342)
+
+```
+
+For these future visualizations there will be 2, one which will show case the deaths while the other showcases the amount of injured and alive survivors.
+For these first two, the data contains two cause of death, the first cause of death is what we will focus on but the second cause of death are any other means used by the offenders. For these two visualizations only the primary causes will be used.
+
+In this first one we can see rather clearly that the lead cause of deaths in mass murders is shootings. The runner up to this seems to be either stabbing or blunt force. In this graph and what you will notice in the other graphs as well is that in general the mid west is the much safer area relatively. The east coast specifically is strewn with mass murders of multiple different degrees.
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = firstcod, size = num_victims_killed),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Primary Reason for Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "First Cause of Death", size = "Amount of Victims Murdered")
+
+```
+This visualization is similar to the last except it show cases the amount of injured victims. This means any victims that were part of the mass murder attempt and survived with injuries.  Similar to the last, a large portion of these correlate with the deaths, plenty of incidents occuring in the east, west and central US yet the mountaineous/midwest is much more barren in comparison. This could be a portrayal of simply the population to incidents but as I do not have population data it is hard to confirm that. 
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = firstcod, size = num_victims_injured),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Primary Reason for Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "First Cause of Death", size = "Number of Injured Victims")
+
+```
+
+Next is the locations in which these incidents took place. Predominantly it seems like the majority of mass murders occurred in residences while the next closest being in universities or schools. Next it also seems like bars/clubs/restaurants are next making me believe that maybe there is a disproportionate amount of victims that may be in either in there 20s to 30s, around the age you are still in school and/or going out with friends (clubbing, eating, drinking, etc.)
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = location, size = num_victims_killed),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Location and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Location", size = "Number of Murdered Victims")
+```
+With what you can see in this visualization of the surviving victims, residences still dominate with sheer amount, however, this also showcases that a lot more people are surviving mass murder attempts in general and not just in residences. One may conclude that your chances of surviving may go up significantly if out in public but it is too early to state this as fact.
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = location, size = num_victims_injured),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Location and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Location", size = "Amount of Injured Victims")
+```
+Here it is actually somewhat difficult to tell what may be the most prevalent type of incidents. It seems like most of the incidents were indiscriminate or family issues. That said, the amount by which they be the most is not very high so across the board it looks like most situations could escalate to this degree. 
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = situation_type, size = num_victims_killed),
+  alpha = 0.8) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Type of Incident and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Type of Situation", size = "Amount of Murdered Victims")
+
+```
+Not much else to say here however it is worth noting the amount of bigger zones of injured victims compared to deaths. While it shows more people were endangered it also shows that there were plenty of survivors as well which is note worthy. Most of these were indiscriminate but there are a few others like despondency, terrorism and arson.
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = situation_type, size = num_victims_injured),
+  alpha = 0.8) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Type of Incident and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Type of Situation", size = "Number of Injured Victims")
+
+```
+
+
+```{r}
+# Getting a count of the incidents per state
+stateIncidents <- incidents %>%
+  count(state)
+
+# Setting a fill color variable dependent on the number of incidents
+stateIncidents <- stateIncidents %>%
+  mutate(fillColor = ifelse(n>=40, "40+", ifelse(n>=20, "20-39", "0-19")))
+```
+
+Here are bar graph statistics showcasing all of the incidents from the data set and showing them from most to least in a bar graph form. From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occurring) locations in the US. Florida being an honorable mention for fourth place. From here on I could also then further test to check the amount of victims, whilst this graph shows the most mass killings in occurrence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
+
+One notable mention for these next three graphs is that I left in the Las Vegas shooting and that is due to the nature of the situation. As of this day, there is still no verified reason for why the offender did what he did, however, there has been speculation to what it could be and a lot of people assume it may have something to do with his gambling. Las Vegas being essentially the hub of night life, party, gambling, all of the above, I decided to include it as even though it is an outlier in this data set, I believe it is still likely enough for another occurrence to partake if that is the reason to be believed.
+
+```{r, fig.width = 10, fig.height = 10}
+# Creating the graph and organizing by amount
+ggplot(stateIncidents, aes(x = reorder(state, +n), y = n, fill = fillColor)) + 
+  geom_bar(stat = 'identity', width = 0.8) + 
+  geom_text(aes(label = n), hjust = -.25) +
+  scale_fill_manual(values = c("0-19" = "gold", "20-39" = "orange", "40+" = "red")) +
+  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
+  labs(title = "Total Incidents Per State", x = "States", y = "Amount of Incidents", fill = "Incident Ranges") +
+  coord_flip()
+```
+```{r}
+# Getting a sum of the amount of both victims killed and injured per state
+deadlynessPerState <- incidents %>%
+  group_by(state) %>%
+  summarize(totalDeaths = sum(num_victims_killed), totalInjured = sum(num_victims_injured))
+
+# Now applying a manual fill variable to be able to apply to the graph later
+deadlynessPerState <- deadlynessPerState %>%
+  mutate(fillColorDeath = ifelse(totalDeaths>=200, "200+", ifelse(totalDeaths>=100, "100-199", "0-99")),
+         fillColorInjury = ifelse(totalInjured>=200, "200+", ifelse(totalInjured>=100, "100-199", "0-99")))
+```
+
+And here I checked the amount of deaths per state. The top states stayed relatively the same however it is worth noting that while Illinois had more occurrences, it seems that there were more deadly incidents in Florida as it ended up overtaking Illinois as the 3rd.
+
+```{r, fig.width = 10, fig.height = 10}
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalDeaths), y = totalDeaths, fill = fillColorDeath)) +
+  geom_bar(stat = 'identity', width = 0.9) +
+  geom_text(aes(label = totalDeaths), hjust = -.25) +
+  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "red")) +
+  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
+  labs(title = "Total Victims Murdered Per State", x = "States", y = "Amount Murdered", fill = "Death Ranges") +
+  coord_flip()
+```
+
+Another measurement of deadliness/lethality would be the amount of injured people. Luckily, this means that everyone here survived the occurrences yet it also displays how many more people were involved in the situations leading to more a wide spread problem. What is notable is that Nevada has overtaken every state my a large margin and this is due to the aforementioned Las Vegas shooting of 2017. Again, luckily, a lot of people were able to survive that attack but many were injured, 850+ to be exact. This level of malice could potentially occur again due to the nature of Las Vegas so it is something to be mindful of and I believe noteworthy enough to keep in. 
+
+Next, Texas and California are the 2nd and 3rd with most injured victims respectively. Something to be mindful though is that Florida is 5th while also being higher in the other visualizations which could be inferred as Florida actually being worse as it is possible that it means that if you are in a mass murder attempt in Florida, you may be less likely to survive.
+
+```{r, fig.width = 10, fig.height = 10}
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalInjured), y = totalInjured, fill = fillColorInjury)) +
+  geom_bar(stat = 'identity', width = 0.9) +
+  geom_text(aes(label = totalInjured), hjust = -.25) +
+  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "red")) +
+  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
+  labs(title = "Total Injured Victims Per State", x = "States", y = "Amount of Injured", fill = "Injury Ranges") +
+  coord_flip()
+```
+
+```{r}
+# Getting a count of the incidents per state
+weaponCount <- weapons %>%
+  count(weapon_type)
+
+# Setting a fill color variable dependent on the number of incidents
+stateIncidents <- stateIncidents %>%
+  mutate(fillColor = ifelse(n>=40, "40+", ifelse(n>=20, "20-39", "0-19")))
+```
+
+This bar graph lets us see what is the most prevalent means of murder that was used. Some are a little weird to classify as a weapon but what it means is what was used. This graph actually supports our prior observation how guns are by far the most prevalent. The usage difference is staggering, all the others combined do not even add to half of the usage of weapons.
+
+```{r, fig.width = 10, fig.height = 5}
+ggplot(weaponCount, aes(x = reorder(weapon_type, +n), y = n, fill = weapon_type)) +
+  geom_bar(stat = "identity", width = 0.9) +
+  geom_text(aes(label = n), hjust = -.25) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), legend.position = "none") +
+  labs(title = "Total Amount of Weapon Types Used", x = "Weapon Type", y = "Count") +
+  coord_flip()
+```
+
+
+
+```{r}
+# Getting rid of N/A
+victimsClean <- victims %>%
+  na.omit()
+
+# Replace empty cells in the situation_type column in incidents with "Unknown"
+victimsClean$race[victimsClean$race == ""] <- "Unknown"
+```
+
+```{r}
+victimCountSex <- victimsClean %>%
+  count(sex) 
+
+victimCountRace <- victimsClean%>%
+  count(race)
+```
+
+With this Violin plot (+ Boxplot) we can see the general distribution of the victims as well as the medians. Generally it seems that females and males are both on average not too dissimilar 1497M VS 1656F > 47.5% to 52.5%. Proportionally however, the age of which they died does not seem to matter despite the sex. The unknown seems to be cases which the bodies were recovered but maybe not able to be identified as these cases have little to no information to them
+
+```{r, fig.width = 5, fig.height = 5}
+ggplot(victimsClean, aes(x = sex, y = age, fill = sex)) +
+  geom_violin(trim = TRUE, alpha = 0.9, scale = "width") +
+  geom_boxplot(width = 0.1) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold")) +
+  labs(title = "Showcase Density of Victims' Sex to Age", x = "Sex", y = "Age")
+```
+
+```{r}
+victimCountSex
+```
+Similar to the violin plot above but this one goes over the race to age. Unlike the sex one it seems there is some form of disproportion based on race. Whether this is due to the crime or targetting them is still too early to say, however, it seems that on average hispanic/latino and black people are more likely to be a victim in these mass murders at the average age of ~25. American Indian is around ~30 and Asian/Pacific Islander with White average at around ~35.
+
+```{r, fig.width = 10, fig.height = 10}
+# Commented out Jitter as too many observations causes visual clutter.
+
+ggplot(victimsClean, aes(x = race, y = age, fill = race)) +
+  #geom_jitter(shape = 16, position=position_jitter(0.2), alpha = 0.6) + 
+  geom_violin(trim = TRUE, alpha = 0.9, scale = "width") +
+  geom_boxplot(width = 0.1) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold")) +
+  labs(title = "Showcase Density of Victims' Race to Age", x = "Race", y = "Age")
+```
+
+```{r}
+victimCountRace
+```
+
+I recalled in the past that there was a discriminatory attack at the gay Orlando night cub named Pulse. This made me wonder if there were any other discriminatory attacks, while that incident was chalked up to terrorism, it still was an attack on a location where the target audience was predominantly gay men. 
+Here I was checking if there are any other discriminatory attacks against gay people searching through the narratives for the term "gay", surprisingly, out of all the ones in the US only one showed up, which is the same one from above that occurred in Orlando.
+
+Surprisingly enough, out of the 600+ incidents there were barely any that specifically were targeting people whether it be for their sexual orientation or just racism. Of course, this was looking through the narrative to see if there were any that may not have been included in the situation_type of "Hate" and the only one not there was the Orlando Nightclub shooting and this is due to later further evidence of it being categorized as a terrorist attack as the offender had affiliations to ISIS.
+
+```{r}
+# With grepl I can search for specific words in the narrative or any other of the strings of texts that give narratives.
+incidents %>%
+  filter(grepl("gay", narrative))
+
+incidents %>%
+  filter(grepl("lesbian", narrative))
+
+incidents %>%
+  filter(grepl("queer", narrative))
+
+incidents %>%
+  filter(grepl(" anti", narrative))
+
+incidents %>%
+  filter(grepl("LGBT", narrative))
+
+incidents %>%
+  filter(situation_type == "Hate")
+
+```
+

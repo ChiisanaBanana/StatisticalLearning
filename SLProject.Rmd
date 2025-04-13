@@ -18,12 +18,19 @@ library(mapproj)
 library(usmap)
 library(ISLR2)
 library(factoextra)
+library(MASS)
 library(dplyr)
 library(hexbin)
+library(lubridate)
+library(corrplot)
+library(caret)
+library(randomForest)
+library(car)
+library(pROC)
 ```
 
 ```{r}
-setwd("C:/Users/halan/Desktop/FPU2025Spring/Statistical Learning")
+setwd("C:/Users/halan/Desktop/FPU/SPring2025/StatisticalLearning")
 
 incidents <- read.csv("mass_killing_incidents_public.csv")
 offenders <- read.csv("mass_killing_offenders_public.csv")
@@ -42,7 +49,7 @@ DATA: Mass Killing Database 2006 - Present (AS OF MARCH 15th 2025)
 
 Mass Murder for this dataset is defined as "...the intentional killing of four or more victims by any means within a 24-hour period, excluding the death of unborn children and the offender(s).)
 
-This Database is constantly being updated (Was just updated 2 hours ago as of March 16th, 2025 at 12:50PM) and I would say is very trustworthy. The contact details for this Database is Justin Myers. Justin Myers is a veteran journalist for "The Associated Press", they are also working with Northeastern University's James Alan Fox whomst is also a contact.
+This Database is constantly being updated (Was just updated 2 hours ago as of March 16th, 2025 at 12:50PM) and I would say is very trustworthy. The contact details for this Database is Justin Myers. Justin Myers is a veteran journalist for "The Associated Press", they are also working with Northeastern University's James Alan Fox whom is also a contact.
 
 
 
@@ -111,16 +118,19 @@ glimpse(incidents)
 ```
 
 
-
+Filling in blank information for clarity.
 
 ```{r}
 unique(incidents$situation_type)
 
+incidents$situation_type[incidents$situation_type == ""] <- "Unknown"
+
+unique(incidents$situation_type)
 ```
 Here is a quick diagram of the US (Excluding Alaska and Hawaii as it's not properly fitted) that showcases where all the incidents took place. The plan is for me to eventually also turn this into a heat map to give a better gauge as when there are multiple like this it is difficult to showcase how much there is due to overlap. I am also attempting two different ways of showing the data points. Eventually I'll figure out which would be the most effective method.
 ```{r}
 varI <- incidents %>%
-  select(c(longitude, latitude, firstcod, situation_type, location, num_victims_killed, num_victims_injured)) %>%
+  select(c(incident_id, longitude, latitude, firstcod, situation_type, location, num_victims_killed, num_victims_injured)) %>%
   rename(lon = longitude) %>%
   rename(lat = latitude)
 
@@ -129,30 +139,65 @@ varI
 transformedData <- usmap_transform(varI)
 ```
 
+
+```{r}
+tempData <- transformedData %>%
+  filter(row_number() != 262)
+```
+
 ```{r}
 plot_usmap() + geom_sf(
-  data = transformedData,
+  data = tempData,
   aes(color = firstcod, size = num_victims_killed),
-  alpha = 0.8) +
-  theme(legend.position = "none")
+  alpha = .5) +
+  theme(legend.position = "right", legend.key.size = unit(1, 'mm'), plot.title=element_text(hjust=0.5, face = "bold")) +
+  labs(title = "PRIMARY reason for victim deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.")
 
 ```
 
 ```{r}
 plot_usmap() + geom_sf(
-  data = transformedData,
-  aes(color = location),
-  alpha = .8) +
-  theme(legend.position = "bottom")
+  data = tempData,
+  aes(color = firstcod, size = num_victims_injured),
+  alpha = .5) +
+  theme(legend.position = "right", legend.key.size = unit(1, 'mm'), plot.title=element_text(hjust=0.5, face = "bold")) +
+  labs(title = "PRIMARY reason for injured victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.")
 
 ```
 
 ```{r}
 plot_usmap() + geom_sf(
-  data = transformedData,
-  aes(color = situation_type),
+  data = tempData,
+  aes(color = location, size = num_victims_killed),
+  alpha = .5) +
+  theme(legend.position = "right", legend.key.size = unit(1, 'mm'), plot.title=element_text(hjust=0.5, face = "bold")) +
+  labs(title = "Location and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.")
+```
+```{r}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = location, size = num_victims_injured),
+  alpha = .5) +
+  theme(legend.position = "right", legend.key.size = unit(1, 'mm'), plot.title=element_text(hjust=0.5, face = "bold")) +
+  labs(title = "Location and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.")
+```
+
+```{r}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = situation_type, size = num_victims_killed),
   alpha = 0.8) +
-  theme(legend.position = "bottom")
+  theme(legend.position = "right", legend.key.size = unit(1, 'mm'), plot.title=element_text(hjust=0.5, face = "bold")) +
+  labs(title = "Type of Incident and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.")
+
+```
+```{r}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = situation_type, size = num_victims_injured),
+  alpha = 0.8) +
+  theme(legend.position = "right", legend.key.size = unit(1, 'mm'), plot.title=element_text(hjust=0.5, face = "bold")) +
+  labs(title = "Type of Incident and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.")
 
 ```
 
@@ -166,14 +211,13 @@ stateIncidents <- stateIncidents %>%
   mutate(fillColor = ifelse(n>=40, "40+", ifelse(n>=20, "20-39", "0-19")))
 ```
 
-Here is a bar graph statistic showcasing all of the incidents from the data set and showing them from most to least in a bar graph form. From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occuring) locations in the US. Florida being an honorable mention for fourth place. From here on I could also then further test to check the amount of victims, whilst this graph shows the most mass killings in occurence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
+Here is a bar graph statistic showcasing all of the incidents from the data set and showing them from most to least in a bar graph form. From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occuring) locations in the US. Florida being an honorable mention for fourth place. From here on I could also then further test to check the amount of victims, whilst this graph shows the most mass killings in occurrence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
 
 ```{r}
 # Creating the graph and organizing by amount
 ggplot(stateIncidents, aes(x = reorder(state, +n), y = n, fill = fillColor)) + 
   geom_bar(stat = 'identity', width = 0.8) + 
-  scale_fill_identity() +
-  scale_fill_manual(values = c("0-19" = "#0a6f97", "20-39" = "#5c0a97", "40+" = "#970a0c")) +
+  scale_fill_manual(values = c("0-19" = "gold", "20-39" = "orange", "40+" = "darkred")) +
   theme(axis.text.y = element_text(size = 7, hjust = 1)) +
   labs(title = "Total Incidents Per State", x = "States", y = "Amount of Incidents") +
   coord_flip()
@@ -187,20 +231,22 @@ deadlynessPerState <- incidents %>%
 # Now applying a manual fill variable to be able to apply to the graph later
 deadlynessPerState <- deadlynessPerState %>%
   mutate(fillColorDeath = ifelse(totalDeaths>=200, "200+", ifelse(totalDeaths>=100, "100-199", "0-99")),
-         fillColorInjury = ifelse(totalInjured>=200, "200+", ifelse(totalDeaths>=100, "100-199", "0-99")))
+         fillColorInjury = ifelse(totalInjured>=200, "200+", ifelse(totalInjured>=100, "100-199", "0-99")))
 ```
 
 ```{r}
-ggplot(deadlynessPerState, aes(x = reorder(state, +totalDeaths), y = totalDeaths)) +
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalDeaths), y = totalDeaths, fill = fillColorDeath)) +
   geom_bar(stat = 'identity', width = 0.8) +
-  scale_fill_manual(values = c("0-99" = "#0a6f97", "100-199" = "#5c0a97", "200+" = "#970a0c")) +
+  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "darkred")) +
   theme(axis.text.y = element_text(size = 7, hjust = 1)) +
   labs(title = "Total Victim Deaths Per State", x = "States", y = "Amount of Deaths") +
   coord_flip()
+```
 
-ggplot(deadlynessPerState, aes(x = reorder(state, +totalInjured), y = totalInjured)) +
+```{r}
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalInjured), y = totalInjured, fill = fillColorInjury)) +
   geom_bar(stat = 'identity', width = 0.8) +
-  scale_fill_manual(values = c("0-99" = "#0a6f97", "100-199" = "#5c0a97", "200+" = "#970a0c")) +
+  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "darkred")) +
   theme(axis.text.y = element_text(size = 7, hjust = 1)) +
   labs(title = "Total Injured Victims Per State", x = "States", y = "Amount of Injured") +
   coord_flip()
@@ -270,5 +316,209 @@ fullMerged = 0
 fullMerged <- full_join(incidents, offenders, by = "incident_id")
 fullMerged <- full_join(fullMerged, victims, by = "incident_id")
 fullMerged <- full_join(fullMerged, weapons, by = "incident_id")
+
+# x = Offender, y = Victim
+fullMergedClean <- subset(fullMerged, select = -c(incident_id, location_type, longitude, latitude, census_tract_geoid, narrative, firstname, lastname, middlename, suffix, deathcause, outcome, criminal_justice_process, sentence_type, sentence_details, victim_id, weapon_id, offender_id, type))
 ```
+
+```{r}
+fullMergedClean$had_survivor <- ifelse(fullMergedClean$num_victims_injured > 0, "Yes", "No")
+fullMergedClean$had_survivor <- as.factor(fullMergedClean$had_survivor)
+```
+
+```{r}
+unique(fullMergedClean)
+
+fullMergedClean$date <- ymd(fullMergedClean$date)
+fullMergedClean$year <- year(fullMergedClean$date)
+fullMergedClean$month <- month(fullMergedClean$date)
+fullMergedClean$day <- days(fullMergedClean$date)
+fullMergedClean$weekday <- weekdays(fullMergedClean$date)
+
+factorCol <- c("weekday", "city", "state", "firstcod", "secondcod", "if_assault_rifle_used", "situation_type", "location", "county", "race.x", "sex.x", "race.y", "sex.y", "vorelationship", "weapon_type", "weapon_type", "gun_class", "gun_type")
+
+fullMergedClean <- fullMergedClean |>
+  mutate(across(all_of(factorCol), as.factor))
+
+fullMergedClean$suicide <- as.numeric(fullMergedClean$suicide)
+
+testMerge <- subset(fullMergedClean, select = c(weekday, state, num_offenders, num_victims_killed, num_victims_injured, firstcod, secondcod, if_assault_rifle_used, situation_type, location, age.x, race.x, sex.x, age.y, race.y, sex.y, vorelationship, weapon_type, gun_class, gun_type, had_survivor))
+
+testMerge
+```
+
+
+```{r}
+ldaTestModel <- lda(had_survivor ~ ., data = testMerge)
+summary(ldaTestModel)
+
+cor(testMerge)
+```
+
+```{r}
+incidents
+offenders
+victims
+weapons
+```
+
+FEATURE ENGINEER, GOING TO MERGE EVERYTHING
+Features wanted
+incident_id, date, state, num_offenders, num_victims_killed, num_victims_injured, firstcod, if_assault_rifle_used, situation_type, location, offender_age, offender_race, offender_sex, victim_age, victim_sex, vorelationship, weapon_type
+
+ADD
+num_victims_total
+
+Turn Categorical into dummy variables
+
+```{r}
+# Fixing the date and adding extra date columns.
+incidentsUpdated <- incidents %>%
+  mutate(
+    date = as.Date(date),
+    year = year(date),
+    month = month(date),
+    day = day(date),
+    weekday = weekdays(date)
+  )
+
+incidentsUpdated <- na.omit(incidentsUpdated)
+
+incidentsUpdated$had_survivor <- ifelse(incidentsUpdated$num_victims_injured > 0, "Yes", "No")
+incidentsUpdated$had_survivor <- as.factor(incidentsUpdated$had_survivor)
+
+# [Name] Summaries, these will get all the columns that will be used for the models.
+incidentsSum <- incidentsUpdated %>%
+  subset(select = c(incident_id, date, year, month, day, weekday, state, num_offenders, num_victims_killed, num_victims_injured, firstcod, situation_type, location, had_survivor))
+
+offenderSum <- offenders %>%
+  subset(select = c(incident_id, offender_id, age, race, sex)) %>%
+  rename(offenderAge = age) %>%
+  rename(offenderRace = race) %>%
+  rename(offenderSex = sex)
+
+victimSum <- victims %>%
+  subset(select = c(incident_id, victim_id, age, race, sex, vorelationship)) %>%
+  rename(victimAge = age) %>%
+  rename(victimRace = race) %>%
+  rename(victimSex = sex)
+
+weaponSum <- weapons %>%
+  subset(select = c(incident_id, weapon_id, weapon_type))
+
+# Merging the data
+totalData <- incidentsSum %>%
+  left_join(offenderSum, by = "incident_id") %>%
+  left_join(victimSum, by = "incident_id") %>%
+  left_join(weaponSum, by = "incident_id")
+
+totalData <- na.omit(totalData)
+totalData
+```
+
+```{r}
+# List of column names I need to factorize
+charEncode <- c("weekday", "state", "firstcod", "situation_type", "location", "offenderRace", "offenderSex", "victimRace", "victimSex", "vorelationship", "weapon_type")
+```
+
+```{r}
+# Turns any blank cells to "Unknown"
+totalData[totalData == ""] <- "Unknown"
+
+#any(is.na(totalData))
+
+# This will factorize all of the data instead of having to manually do it
+totalDataFactored <- totalData %>%
+  mutate(across(all_of(charEncode), ~ as.integer(factor(.x))))
+```
+
+```{r}
+# Sums the max value in all of the columns which should, in theory, give the total amount of distinct columns I should have.
+sum(sapply(totalDataFactored[charEncode], max))
+
+# Get all of the names and which column they were from
+factorLookup <- totalData %>%
+  dplyr::select(charEncode) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Origin",
+               values_to = "Name") 
+
+# Gathers all of the factored data
+factorLookup2 <- totalDataFactored %>%
+  dplyr::select(charEncode) %>%
+  pivot_longer(cols = everything(),
+               names_to = NULL,
+               values_to = "Encoded Value")
+
+# Assuming nothing has changed and having checked the number it matches up. I assume this is correct and now factorLookup is a good dictionary to go back to.
+factorLookup <- cbind(factorLookup, factorLookup2)
+factorLookup <- distinct(factorLookup)
+factorLookup
+```
+
+```{r}
+splitData <- createDataPartition(binaryFactored$had_survivor, p = 0.8, list = FALSE)
+trainData <- binaryFactored[splitData, ]
+testData <- binaryFactored[-splitData, ]
+```
+
+
+```{r, fig.width = 8, fig.height = 8}
+# This is so that I can use it in the corr matrix but also make my life easier
+totalDataFactoredForReal <- subset(totalDataFactored, select = -c(incident_id, date, year, month, offender_id, victim_id))
+totalDataFactoredForReal$had_survivor <- as.numeric(totalDataFactoredForReal$had_survivor)
+
+# Linear Regression Model
+linModel <- lm(had_survivor ~ ., data = totalDataFactoredForReal)
+summary(logModel)
+
+corM <- cor(totalDataFactoredForReal)
+corrplot(corM, method = "color")
+heatmap(corM, symm = TRUE, main = "Correlation Heatmap")
+```
+
+```{r}
+# K-Fold Train Control
+set.seed(789)
+train_control <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary, verboseIter = FALSE)
+```
+
+```{r}
+binaryFactored <- subset(totalDataFactored, select = -c(incident_id, date, year, month, offender_id, victim_id))
+binaryFactored$had_survivor <- factor(totalDataFactored$had_survivor, levels = c("Yes", "No"))
+binaryFactored
+
+table(binaryFactored$had_survivor)
+
+rfModel <- train(had_survivor ~ . -had_survivor -num_victims_killed -num_victims_injured, data = binaryFactored, method = "rf", trControl = train_control, ntree = 500)
+print(rfModel)
+
+```
+
+
+```{r}
+# Logistic Regression: Creating the initial model
+logModel <- glm(had_survivor~ . -num_victims_killed -num_victims_injured -had_survivor, data = trainData, family = "binomial")
+
+# Applying stepwise
+stepLogModel <- step(logModel, direction = "both")
+
+# Training the stepwise on kCV
+stepLogModelCV <- train(had_survivor ~ . -num_victims_killed -num_victims_injured -had_survivor, data = trainData, method = "glm", family = "binomial", trControl = train_control, metric = "ROC")
+```
+
+```{r}
+# Logistic Regression with Step Wise and kCV
+stepLogPred <- predict(stepLogModelCV, newdata = testData, type = "prob")
+rocOb <- roc(testData$had_survivor, stepLogPred$Yes)
+plot(rocOb, print.auc = TRUE,
+         col = "blue",
+         lwd = 3,
+         legacy.axes = TRUE,
+         main = "ROC Curve for Survival Prediction")
+abline(a = 0, b = 1, lty = 2, col = "red")
+auc(rocOb)
+```
+
+
 
