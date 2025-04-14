@@ -12,16 +12,24 @@ Sys.setenv(LANG = "en")
 ```{r}
 # All libraries. I don't think I ended up using them all but I don't want to find out which one I'm not using.
 
+library(randomForest)
+library(factoextra)
+library(lubridate)
 library(tidyverse)
-library(sf)
+library(corrplot)
 library(ggplot2)
-library(maps)
 library(mapproj)
+library(hexbin)
 library(usmap)
 library(ISLR2)
-library(factoextra)
 library(dplyr)
-library(hexbin)
+library(caret)
+library(maps)
+library(MASS)
+library(pROC)
+library(car)
+library(sf)
+
 ```
 
 ```{r}
@@ -122,7 +130,7 @@ incidents$situation_type[incidents$situation_type == ""] <- "Unknown"
 ```{r}
 # Subset for transforming the geo-data
 varI <- incidents %>%
-  select(c(incident_id, longitude, latitude, firstcod, situation_type, location, num_victims_killed, num_victims_injured)) %>%
+  dplyr::select(c(incident_id, longitude, latitude, firstcod, situation_type, location, num_victims_killed, num_victims_injured)) %>%
   rename(lon = longitude) %>%
   rename(lat = latitude)
 
@@ -376,4 +384,175 @@ incidents %>%
   filter(situation_type == "Hate")
 
 ```
+
+
+```{r}
+# Fixing the date and adding extra date columns.
+incidentsUpdated <- incidents %>%
+  mutate(
+    date = as.Date(date),
+    year = year(date),
+    month = month(date),
+    day = day(date),
+    weekday = weekdays(date)
+  )
+
+# Makes a temp var "had_survivor"
+# "had_survivor" will assume if there was a survivor if the amount of injuries > 0.
+incidentsUpdated$had_survivor <- ifelse(incidentsUpdated$num_victims_injured > 0, "Yes", "No")
+incidentsUpdated$had_survivor <- as.factor(incidentsUpdated$had_survivor)
+
+# [Name] Summaries, these will get all the columns that will be used for the models.
+incidentsSum <- incidentsUpdated %>%
+  subset(select = c(incident_id, weekday, state, num_offenders, had_survivor, firstcod, situation_type, location))
+
+offenderSum <- offenders %>%
+  subset(select = c(incident_id, age, race, sex)) %>%
+  rename(offenderAge = age) %>%
+  rename(offenderRace = race) %>%
+  rename(offenderSex = sex)
+
+victimSum <- victims %>%
+  subset(select = c(incident_id, age, race, sex, vorelationship)) %>%
+  rename(victimAge = age) %>%
+  rename(victimRace = race) %>%
+  rename(victimSex = sex)
+
+weaponSum <- weapons %>%
+  subset(select = c(incident_id, weapon_type))
+
+# Merging the data
+totalData <- incidentsSum %>%
+  left_join(offenderSum, by = "incident_id") %>%
+  left_join(victimSum, by = "incident_id") %>%
+  left_join(weaponSum, by = "incident_id")
+
+# Omit any N/A rows
+totalData <- na.omit(totalData)
+
+# Turns any blank cells to "Unknown"
+totalData[totalData == ""] <- "Unknown"
+
+any(is.na(totalData))
+
+totalData
+```
+
+```{r}
+# List of column names I need to factorize
+charEncode <- c("weekday", "state", "firstcod", "situation_type", "location", "offenderRace", "offenderSex", "victimRace", "victimSex", "vorelationship", "weapon_type")
+```
+
+```{r}
+# This will factorize all of the data instead of having to manually do it
+totalDataFactored <- totalData %>%
+  mutate(across(all_of(charEncode), ~ as.integer(factor(.x))))
+
+totalDataFactored
+```
+
+```{r}
+# I assumed I might need this eventually, factorLookup is meant to be a table that links the encoded values with their original values and what column.
+
+# Sums the max value in all of the columns which should, in theory, give the total amount of distinct columns I should have.
+sum(sapply(totalDataFactored[charEncode], max))
+
+# Get all of the names and which column they were from
+factorLookup <- totalData %>%
+  # Needed to ensure it used dplyr select, I was getting issues with conflicts between libraries.
+  dplyr::select(charEncode) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Origin",
+               values_to = "Name") 
+
+# Gathers all of the factored data
+factorLookup2 <- totalDataFactored %>%
+  dplyr::select(charEncode) %>%
+  pivot_longer(cols = everything(),
+               names_to = NULL,
+               values_to = "Encoded Value")
+
+# Assuming nothing has changed and having checked the number it matches up. I assume this is correct and now factorLookup is a good dictionary to go back to.
+factorLookup <- cbind(factorLookup, factorLookup2)
+factorLookup <- distinct(factorLookup)
+factorLookup
+```
+
+
+```{r}
+# Holdout Test Data
+splitData <- createDataPartition(totalDataFactored$had_survivor, p = 0.8, list = FALSE)
+trainData <- totalDataFactored[splitData, ]
+testData <- totalDataFactored[-splitData, ]
+```
+
+```{r}
+# K-Fold Train Control
+set.seed(789)
+train_control <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary, verboseIter = FALSE)
+```
+
+```{r, fig.width = 8, fig.height = 8}
+# This is so that I can use it in the corr matrix but also make my life easier
+corFactorData <- totalDataFactored
+corFactorData$had_survivor <- as.numeric(corFactorData$had_survivor)
+
+corM <- cor(corFactorData)
+corrplot(corM, method = "color")
+heatmap(corM, symm = TRUE, main = "Correlation Heatmap")
+```
+
+
+```{r}
+# Logistic Regression: Creating the initial model
+logModel <- glm(had_survivor~ ., data = trainData, family = "binomial")
+
+# Applying stepwise
+stepLogModel <- step(logModel, direction = "both")
+logFormula <- formula(stepLogModel)
+
+# Training the stepwise on kCV
+stepLogModelCV <- train(logFormula, data = trainData, method = "glm", family = "binomial", trControl = train_control, metric = "ROC")
+```
+
+```{r}
+# Logistic Regression with Step Wise and kCV
+stepLogPred <- predict(stepLogModelCV, newdata = testData, type = "prob")
+rocLog <- roc(testData$had_survivor, stepLogPred$Yes)
+plot(rocLog, print.auc = TRUE,
+         col = "blue",
+         lwd = 3,
+         legacy.axes = TRUE,
+         main = "ROC Curve for Survival Prediction")
+abline(a = 0, b = 1, lty = 2, col = "red")
+auc(rocLog)
+```
+
+```{r}
+# Making train model for random forest
+rfModel <- train(had_survivor ~ ., data = trainData, method = "rf", trControl = train_control, ntree = 500)
+print(rfModel)
+
+```
+
+```{r}
+# RF Predict
+rfPred <- predict(rfModel, newdata = testData, type = "prob")
+
+# Get ROC and AUC
+rocRF <- roc(testData$had_survivor, rfPred$Yes)
+plot(rocRF, print.auc = TRUE,
+         col = "blue",
+         lwd = 3,
+         legacy.axes = TRUE,
+         main = "ROC Curve for Survival Prediction")
+abline(a = 0, b = 1, lty = 2, col = "red")
+auc(rocRF)
+```
+
+```{r}
+table(trainData$had_survivor)
+prop.table(table(trainData$had_survivor))
+```
+
 
