@@ -6,9 +6,11 @@ author: "Halan Badilla Osorio"
 
 What I want you to do for this assignment is pick just one of these models and do a little light research. 
 
+Spline Regression
+
 1. describe how this model works
 
-The simplest way I can think of explaining this is that this is you using regression but you are splitting your x-var into intervals allowing you to do multiple regressions that best fit in their own separate intervals.
+The simplest way I can think of explaining this is that this is you using regression but you are splitting your x-var into intervals allowing you to do multiple regressions that best fit in their own separate intervals. These intervals do not need to have a pattern but simply that when splines will connect to the vertical asymptotes, the knots. Now there will be individual regressions per interval allowing you to smooth out the curve fit.
 
 Good link that goes really in depth with them. It is for Python though.
 https://diogoribeiro7.github.io/data%20science/understanding_splines_what_they_how_they_used_data_analysis/
@@ -38,41 +40,81 @@ library(dplyr)
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
+library(splines)
 ```
 
 ```{r}
-incidents <- incidents %>% # This will add 3 columns separating the parts of the date
-  mutate(
-    year = year(date),
-    month = month(date, label = TRUE),
-    day = day(date)
-  )
+setwd("C:/Users/halan/Desktop/FPU/Spring2025/StatisticalLearning/")
+banana <- read_csv("banana_quality.csv")
+```
+```{r}
+# Factoring Quality
+banana$Quality <- factor(banana$Quality)
 
-incidents <- incidents %>% # This will make a separate column of year and month
-  mutate(
-    yearMonth = make_date(year, month) %>%
-      format("%Y-%m")
-  )
+unique(banana$Quality)
 
-incidents <- incidents %>% # Sum the total of deaths per month
-  group_by(yearMonth) %>%
-  mutate(deathsByMonth = sum(num_victims_killed))
+cleanBanana <- na.omit(banana)
+# Abritrary weighted mean that I will use
+weights <- c(.2, .05, .1, .1, .05, .4, .1)
 
-incidents <- incidents %>% # Sum the total of injuries per month
-  group_by(yearMonth) %>%
-  mutate(injuredByMonth = sum(num_victims_injured))
+bananaAvg <- cleanBanana %>%
+  mutate(randomQuantifier = (Size*weights[1] + Weight*weights[2] + Sweetness*weights[3] + Softness*weights[4] + HarvestTime*weights[5] + Ripeness*weights[6] + Acidity*weights[7]))
 
-victimIncidentMerge <- merge(incidents, victims, key = incident_id)
+# Linear Model using all points
+bananaModel <- glm(Quality ~ bs(randomQuantifier, df = 6), data = bananaAvg, family = "binomial")
+
+# Getting the knot info for visualization
+
+knots <- attr(bs(cleanBanana$randomQuantifier, df = 6), "knots")
+
+# Linear Model using all points
+bananaModel2 <- glm(Quality ~ bs(randomQuantifier, df = 9), data = bananaAvg, family = "binomial")
+
+# Getting the knot info for visualization
+
+knots2 <- attr(bs(cleanBanana$randomQuantifier, df = 9), "knots")
+
+
+summary(bananaModel)
+
+bananaAvg$predProb <- predict(bananaModel, type = "response")
+bananaAvg$predProb2 <- predict(bananaModel2, type = "response")
 ```
 
-```{r}
-simpleLinearDeaths <- lm(age ~ as.factor(race) + as.factor(sex), victims)
-summary(simpleLinearDeaths)
-```
+```{r, fig.width = 10, fig.height = 10}
+ggplot(bananaAvg, aes(x = randomQuantifier, y = predProb)) +
+  geom_point(alpha = 0.3) +
+  #geom_smooth(method = "loess", se = FALSE, color = "lightblue") +
+  geom_vline(xintercept = knots, linetype = "dashed", color = "red", size = 1) +
+  labs(title = "Spline Regression on Weighted Average",
+       y = "Predicted Probability of High Quality", x = "randomQuantifier: A weighted Average")+
+  theme(plot.title = element_text(hjust = 0.5))
 
-```{r}
-ggplot()
+ggplot(bananaAvg, aes(x = randomQuantifier, y = predProb2)) +
+  geom_point(alpha = 0.3) +
+  #geom_smooth(method = "loess", se = FALSE, color = "lightblue") +
+  geom_vline(xintercept = knots2, linetype = "dashed", color = "red", size = 1) +
+  labs(title = "Spline Regression on Weighted Average",
+       y = "Predicted Probability of High Quality", x = "randomQuantifier: A weighted Average")+
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
 5. explain the output and how well the model functioned
+
+I made two splines visualizations, they're each of the same model but one has df = 6 while the other is df = 9. df(degrees of freedom) is what tells it how many knots there will be. The amount of knots will always be df - 2, So for df = 6 there will be 4 knots, however, bs()[b-spline] also puts one at the boundary so it is not visible in this case. Anyways, in my case I would say it generally worked, I used an arbitrary weighted average to be able to predict the quality based on this average. The average gave more importance to certain qualities and from this we can see that it generally was able to predict correctly but there were drop off points in accuracy at certain points. The more splines the more you can see the subtle changes in the predictions at certain points.
+
 6. cite a research paper which uses this model type in its work
+
+https://kk.unmeka.ac.id/scholarhub/Spline%20regression%20in%20clinical%20research.pdf
+
+This research paper uses spline regression in a clinical setting to display the continuous relationship between SA levels and mortality risk. 
+
+The main reason of this paper was for the author to introduce the usage of spline regression in their hospital showcasing better results that are also potentially less misleading as it showcases the data much more accurately.
+
+The original/traditional way was using categorical analysis whereas spline regression offered a better more smoothed out while still using the same three categories. The new approach allowed it to display variation within the categories initially used that would have been missed when compared to the traditional means.
+
+The reason this works much better is with the introduction to splines that allows this to see more fine changes in variation according to how many knots are given. Of course, more knots will allow for a more smooth and better representation. 
+
+The limitation for this is simply the knowledge of how to apply it but also slight computational resource increase.
+Knowing where to and how many knots to place is another issue. The models shape and accuracy can highly be dependent on that. If the knots are not chosen correctly it can end up being even misleading. Of course this can be minimized by using other techniques to smooth it out or find the optimal amount of knots.
+And the biggest limitation is simply when used on linear data, there is no point to it if your data is linear.
