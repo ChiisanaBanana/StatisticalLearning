@@ -1,0 +1,78 @@
+---
+title: "Homework 4"
+output: html_notebook
+author: "Halan Badilla Osorio"
+---
+
+What I want you to do for this assignment is pick just one of these models and do a little light research. 
+
+1. describe how this model works
+
+The simplest way I can think of explaining this is that this is you using regression but you are splitting your x-var into intervals allowing you to do multiple regressions that best fit in their own separate intervals.
+
+Good link that goes really in depth with them. It is for Python though.
+https://diogoribeiro7.github.io/data%20science/understanding_splines_what_they_how_they_used_data_analysis/
+
+2. what type of data is this model best used for
+
+Technically this as far as I understand can be used in anything in which you have some sort of regression you're applying. Specifically though, you'd want to use Splines when you are working with *non-linear trends*, *if your data has any sort of threshold/milestone*, *periodic data* and if *you are missing data and want to interpolate or fill a gap.* 
+
+3. what are the advantages and disadvantages
+
+Pros:
+-Can graph non-linear data better
+-Flexible
+-Interpretability (Clear segmentation)
+
+Cons:
+-You need lots of data, can cause you to overfit
+-Complex
+-You need to place knots
+-Interpretability (Can be a con if it gets too complicated and with the more complicated splines)
+
+4. make a model (it doesn't have to be complex, just an example)
+
+```{r}
+Sys.setenv(LANG = "en")
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+```{r}
+incidents <- incidents %>% # This will add 3 columns separating the parts of the date
+  mutate(
+    year = year(date),
+    month = month(date, label = TRUE),
+    day = day(date)
+  )
+
+incidents <- incidents %>% # This will make a separate column of year and month
+  mutate(
+    yearMonth = make_date(year, month) %>%
+      format("%Y-%m")
+  )
+
+incidents <- incidents %>% # Sum the total of deaths per month
+  group_by(yearMonth) %>%
+  mutate(deathsByMonth = sum(num_victims_killed))
+
+incidents <- incidents %>% # Sum the total of injuries per month
+  group_by(yearMonth) %>%
+  mutate(injuredByMonth = sum(num_victims_injured))
+
+victimIncidentMerge <- merge(incidents, victims, key = incident_id)
+```
+
+```{r}
+simpleLinearDeaths <- lm(age ~ as.factor(race) + as.factor(sex), victims)
+summary(simpleLinearDeaths)
+```
+
+```{r}
+ggplot()
+```
+
+5. explain the output and how well the model functioned
+6. cite a research paper which uses this model type in its work
