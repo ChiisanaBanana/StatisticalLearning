@@ -29,7 +29,8 @@ library(MASS)
 library(pROC)
 library(car)
 library(sf)
-
+library(glmnet)
+library(xgboost)
 ```
 
 ```{r}
@@ -397,14 +398,14 @@ incidentsUpdated <- incidents %>%
     weekday = weekdays(date)
   )
 
-# Makes a temp var "had_survivor"
-# "had_survivor" will assume if there was a survivor if the amount of injuries > 0.
-incidentsUpdated$had_survivor <- ifelse(incidentsUpdated$num_victims_injured > 0, "Yes", "No")
-incidentsUpdated$had_survivor <- as.factor(incidentsUpdated$had_survivor)
+# Makes a temp var "DTIRatio" Death To Injured Ratio
+incidentsUpdated$DTIRatio <- incidentsUpdated$num_victims_killed / (incidentsUpdated$num_victims_killed + incidentsUpdated$num_victims_injured)
+incidentsUpdated$DTIRatioLog <- log(incidentsUpdated$DTIRatio)  
+
 
 # [Name] Summaries, these will get all the columns that will be used for the models.
 incidentsSum <- incidentsUpdated %>%
-  subset(select = c(incident_id, weekday, state, num_offenders, had_survivor, firstcod, situation_type, location))
+  subset(select = c(incident_id, weekday, state, num_offenders, situation_type, location, DTIRatioLog))
 
 offenderSum <- offenders %>%
   subset(select = c(incident_id, age, race, sex)) %>%
@@ -412,19 +413,12 @@ offenderSum <- offenders %>%
   rename(offenderRace = race) %>%
   rename(offenderSex = sex)
 
-victimSum <- victims %>%
-  subset(select = c(incident_id, age, race, sex, vorelationship)) %>%
-  rename(victimAge = age) %>%
-  rename(victimRace = race) %>%
-  rename(victimSex = sex)
-
 weaponSum <- weapons %>%
-  subset(select = c(incident_id, weapon_type))
-
+  subset(select = c(incident_id, weapon_type, gun_class, gun_type))
+  
 # Merging the data
 totalData <- incidentsSum %>%
   left_join(offenderSum, by = "incident_id") %>%
-  left_join(victimSum, by = "incident_id") %>%
   left_join(weaponSum, by = "incident_id")
 
 # Omit any N/A rows
@@ -440,11 +434,14 @@ totalData
 
 ```{r}
 # List of column names I need to factorize
-charEncode <- c("weekday", "state", "firstcod", "situation_type", "location", "offenderRace", "offenderSex", "victimRace", "victimSex", "vorelationship", "weapon_type")
+charEncode <- c("weekday", "state", "situation_type", "location", "offenderRace", "offenderSex", "weapon_type", "gun_class", "gun_type")
 ```
 
 ```{r}
 # This will factorize all of the data instead of having to manually do it
+totalData <- totalData %>% 
+  dplyr::select(-incident_id)
+
 totalDataFactored <- totalData %>%
   mutate(across(all_of(charEncode), ~ as.integer(factor(.x))))
 
@@ -452,107 +449,131 @@ totalDataFactored
 ```
 
 ```{r}
-# I assumed I might need this eventually, factorLookup is meant to be a table that links the encoded values with their original values and what column.
+# This will be hot encoded for the other models
+dummyModel <- dummyVars(DTIRatioLog ~ ., data=totalData, levelsOnly = TRUE)
+encodedData <- predict(dummyModel, totalData)
 
-# Sums the max value in all of the columns which should, in theory, give the total amount of distinct columns I should have.
-sum(sapply(totalDataFactored[charEncode], max))
+encodedData <- as.data.frame(encodedData)
 
-# Get all of the names and which column they were from
-factorLookup <- totalData %>%
-  # Needed to ensure it used dplyr select, I was getting issues with conflicts between libraries.
-  dplyr::select(charEncode) %>%
-  pivot_longer(cols = everything(),
-               names_to = "Origin",
-               values_to = "Name") 
+numericVars <- setdiff(names(data), c(charEncode, "DTIRatioLog"))
+totalDataEncoded <- cbind(encodedData, totalData[numericVars], DTIRatioLog = totalData$DTIRatioLog)
 
-# Gathers all of the factored data
-factorLookup2 <- totalDataFactored %>%
-  dplyr::select(charEncode) %>%
-  pivot_longer(cols = everything(),
-               names_to = NULL,
-               values_to = "Encoded Value")
-
-# Assuming nothing has changed and having checked the number it matches up. I assume this is correct and now factorLookup is a good dictionary to go back to.
-factorLookup <- cbind(factorLookup, factorLookup2)
-factorLookup <- distinct(factorLookup)
-factorLookup
+totalDataEncoded
 ```
 
 
 ```{r}
 # Holdout Test Data
-splitData <- createDataPartition(totalDataFactored$had_survivor, p = 0.8, list = FALSE)
-trainData <- totalDataFactored[splitData, ]
-testData <- totalDataFactored[-splitData, ]
+# Need two as one is factored and the other is hot encoded. They use the same predictors
+splitDataFactored <- createDataPartition(totalDataFactored$DTIRatioLog, p = 0.8, list = FALSE)
+trainDataFactored <- totalDataFactored[splitDataFactored, ]
+testDataFactored <- totalDataFactored[-splitDataFactored, ]
+
+splitDataEncoded <- createDataPartition(totalDataEncoded$DTIRatioLog, p = 0.8, list = FALSE)
+trainDataEncoded <- totalDataEncoded[splitDataEncoded, ]
+testDataEncoded <- totalDataEncoded[-splitDataEncoded, ]
 ```
 
 ```{r}
 # K-Fold Train Control
 set.seed(789)
-train_control <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary, verboseIter = FALSE)
+train_control <- trainControl(method = "cv", number = 5, verboseIter = FALSE)
 ```
 
 ```{r, fig.width = 8, fig.height = 8}
 # This is so that I can use it in the corr matrix but also make my life easier
 corFactorData <- totalDataFactored
-corFactorData$had_survivor <- as.numeric(corFactorData$had_survivor)
+corFactorData$DTIRatioLog <- as.numeric(corFactorData$DTIRatioLog)
 
 corM <- cor(corFactorData)
 corrplot(corM, method = "color")
 heatmap(corM, symm = TRUE, main = "Correlation Heatmap")
 ```
 
+```{r}
+lmModel <- lm(DTIRatioLog ~ .-incident_id, data = trainData)
+lmPred <- predict(lmModel, testData)
+
+```
+
 
 ```{r}
-# Logistic Regression: Creating the initial model
-logModel <- glm(had_survivor~ ., data = trainData, family = "binomial")
-
-# Applying stepwise
-stepLogModel <- step(logModel, direction = "both")
-logFormula <- formula(stepLogModel)
-
-# Training the stepwise on kCV
-stepLogModelCV <- train(logFormula, data = trainData, method = "glm", family = "binomial", trControl = train_control, metric = "ROC")
+# Logistic Regression (Elastic Net, Ridge + Lasso)
+elasticModelE <- train(DTIRatioLog ~ ., data = trainDataEncoded, method = "glmnet", trControl = train_control, tuneLength = 10)
+print(elasticModelE)
 ```
 
 ```{r}
-# Logistic Regression with Step Wise and kCV
-stepLogPred <- predict(stepLogModelCV, newdata = testData, type = "prob")
-rocLog <- roc(testData$had_survivor, stepLogPred$Yes)
-plot(rocLog, print.auc = TRUE,
-         col = "blue",
-         lwd = 3,
-         legacy.axes = TRUE,
-         main = "ROC Curve for Survival Prediction")
-abline(a = 0, b = 1, lty = 2, col = "red")
-auc(rocLog)
+elasticPredE <- predict(elasticModelE, testDataEncoded)
+elasticMetricsE <- postResample(elasticPredE, testDataEncoded$DTIRatioLog)
+```
+
+```{r}
+# Now trying with factored data.
+elasticModelF <- train(DTIRatioLog ~ ., data = trainDataFactored, method = "glmnet", trControl = train_control, tuneLength = 10)
+print(elasticModelF)
+```
+```{r}
+elasticPredF <- predict(elasticModelF, testDataFactored)
+elasticMetricsF <- postResample(elasticPredF, testDataFactored$DTIRatio)
 ```
 
 ```{r}
 # Making train model for random forest
-rfModel <- train(had_survivor ~ ., data = trainData, method = "rf", trControl = train_control, ntree = 500)
-print(rfModel)
+rfModelF <- train(DTIRatioLog ~ ., data = trainDataFactored, method = "rf", trControl = train_control, tuneLength = 10)
+print(rfModelF)
 
+```
+```{r}
+rfPredF <- predict(rfModelF, testDataFactored)
+rfMetricsF <- postResample(rfPredF, testDataFactored$DTIRatioLog)
 ```
 
 ```{r}
-# RF Predict
-rfPred <- predict(rfModel, newdata = testData, type = "prob")
-
-# Get ROC and AUC
-rocRF <- roc(testData$had_survivor, rfPred$Yes)
-plot(rocRF, print.auc = TRUE,
-         col = "blue",
-         lwd = 3,
-         legacy.axes = TRUE,
-         main = "ROC Curve for Survival Prediction")
-abline(a = 0, b = 1, lty = 2, col = "red")
-auc(rocRF)
+# XGBoost
+xbgModelE <- train(DTIRatioLog ~ ., data = trainDataEncoded, method = "xgbTree", trControl = train_control, tuneLength = 10)
+xgbModelE <- xbgModelE # NO WAY am I rerunning this. With the training it took roughly 45 minutes. I do not have the time for that so I am just copying the results to this instead of rerunning it.
+print(xgbModelE)
 ```
 
 ```{r}
-table(trainData$had_survivor)
-prop.table(table(trainData$had_survivor))
+xgbPredE <- predict(xgbModelE, testDataEncoded)
+xgbMetricsE <- postResample(xgbPredE, testDataEncoded$DTIRatioLog)
 ```
 
+```{r}
+cat("\nMetrics for Elastic Net Regression with Hot-Encoded Predictors:\n")
+print(elasticMetricsE)
+cat("\nMetrics for Elastic Net Regression with Factorized Predictors:\n")
+print(elasticMetricsF)
+cat("\nMetrics for Random Forest with Factorized Predictors:\n")
+print(rfMetricsF)
+cat("\nMetrics for XGBoost with Hot-Encoded Predictors:\n")
+print(xgbMetricsE)
+```
+ENR (Elastic Net Regression) Hot-Encoded:
+-RMSE: Lower RMSE shows that the model fits the data decently.
+-RSquared: 79% of the variance was explained by the model.
+-MAE: The prediction error is relatively low. Means that it predicts decent without too much error.
 
+ENR Factorized:
+-RMSE: Worse than the hot-encoded, predicts worse.
+-RSquared: Only ~35% of the variance is explained. Much worse than hot-encoded.
+-MAE: Higher MAE is worse than hot-encoded. In general the predictions are even less accurate.
+
+RF Factorized:
+-RMSE: Quite low, lower than ENR H-E, quite strong predictions. Fits the data rather well.
+-RSquared: 88% of the variance was explained, better than any other so far.
+-MAE: Very low MAE shows that it makes a lot less errors on average when it predicts.
+
+XGBoost Hot-Encoded:
+-RMSE: The lowest RMSE. The most accurate out of the bunch.
+-RSquared: Very high, captures ~94% of the variance.
+-MAE: EXTREMELY low MAE. The closest to the actual values with VERY little error.
+
+XGBoost is by far the best model here, this would be a good model to use when predicting for the fatality rate (Death to Injury+Death Ratio). Of course, in a real world setting and if you need very fast computations, RF model would be the way to go. RF predicted very well with only a fraction of the time needed whereas XGBoost gave much better results but took about 6-7 times as long to compute. Of course, this would depend on your processing speed but even with my setup, (6 Core 4.2GHz CPU and with 32GB DDR4 1577 RAM) it took roughly 45 minutes to run a XGBoost with a tuneLength of 10 and train CV cycle of 5. It needed to run 50 different simulations taking around ~54 seconds per iteration. This is on the faster end and realistically may not be viable if this model is to be applied to a situation in which speed is a priority or the computational resources are not sufficient.
+
+In conclusion:
+Elastic Net Regression (With Hot-Encoded Variables): Is the quickest but drops the most in accuracy.
+RF: The model to choose when you need quicker but accurate results.
+XGBoost: The best model but takes much longer.

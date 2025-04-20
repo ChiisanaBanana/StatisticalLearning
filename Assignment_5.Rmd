@@ -1,0 +1,224 @@
+---
+title: "Assignment 5"
+output: html_notebook
+---
+
+**Use the wine data set located in modules**
+
+1. Assignment 4 write up posted in Discussion
+
+2. Use the wine data set in this module to:
+  a. PCA
+  i. run pca
+  ii. how many components do you feel is sufficient to analyze the data?
+  iii. how many components to capture at least 80% of the data?
+  iv. what proportion of variance is capture by the third component only?
+  
+  b. K-means:
+  i. outline the algorithm for k-means clustering
+  ii. use k-means on the wine data set with k = 3 and k = 5
+  iii. which do you feel is a better representation of groups?
+  
+  c. hierarchical clustering
+  i. given this data set, use either single, complete or average linkage to draw and submit a dendrogram:
+  
+| Point | x | y |
+|-------|---|---|
+| A     | 1 | 2 |
+| B     | 2 | 3 |
+| C     | 5 | 8 |
+| D     | 6 | 9 |
+| E     | 8 | 7 |
+  
+  ii. explain which linkage you used and why you felt it was a better choice
+  
+
+  d. Decision Trees
+  i. use bagging to predict alcohol content in wine
+  ii. use random forest with your choice of m and explain why you chose that m.
+  iii. which tree worked best?
+  
+System Language:
+```{r}
+Sys.setLanguage("eng")
+```
+  
+Libraries:
+```{r}
+library(randomForest)
+library(factoextra)
+library(tidyverse)
+library(ggplot2)
+library(cluster)
+library(dplyr)
+library(caret)
+library(ISLR2)
+library(leaps)
+library(tree)
+```
+  
+Data:
+```{r}
+wine <- read_csv("wine.csv")
+```
+
+PCA:
+```{r}
+winePCA <- prcomp(wine, scale. = T)
+summary(winePCA)
+```
+
+How many components do you feel is sufficient to analyze the data?\
+<span style="color:red">Well this comes to preference but I would say 7, it still cuts the components in half (From 14 to 7) while also getting almost 90% of the variance covered.</span>\
+How many components to capture at least 80% of the data?\
+<span style="color:red">5</span>\
+What proportion of variance is capture by the third component only?\
+<span style="color:red">~10.3%</span>\
+
+K-Means Clustering:
+```{r}
+# All numerical data
+head(wine)
+```
+
+```{r}
+wineKCluster3 <- kmeans(wine, centers = 3)
+wineKCluster5 <- kmeans(wine, centers = 5)
+```
+
+```{r}
+fviz_cluster(wineKCluster3, data = wine,
+             palette = c("pink", "#E7B800", "red"), 
+             geom = "point",
+             ellipse.type = "convex",
+             main = "Cluster Plot: k = 3",
+             ggtheme = theme_bw()
+             ) 
+```
+```{r}
+fviz_cluster(wineKCluster5, data = wine,
+             palette = c("pink", "#E7B800", "red", "purple", "magenta"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             main = "Cluster Plot: k = 5",
+             ggtheme = theme_bw()
+             ) 
+```
+
+```{r}
+mean(silhouette(wineKCluster3$cluster, dist(wine)))
+mean(silhouette(wineKCluster5$cluster, dist(wine)))
+```
+Which do you feel is a better representation of groups?\
+<span style="color:red">K = 3. Honestly they both suck. They have a lot of overlapping but 3 centroids makes it look less egregious as you get entire clusters within clusters with 5 centroids. I also looked at the silhouette scores and 3 came much closer to 1 compared to the 2.5 from 5 centroids.</span>\
+
+Hierarchical Clustering:
+```{r}
+points <- data.frame(
+  row.names = c("A", "B", "C", "D", "E"),
+  x = c(1, 2, 5, 6, 8),
+  y = c(2, 3, 8, 9, 7)
+)
+```
+
+```{r}
+pointDist <- dist(points)
+```
+
+```{r, fig.width = 10, fig.height = 5}
+pointAvg <- hclust(pointDist, method = "complete")
+plot(pointAvg,
+     main = "Point Dendrogram: Average Linkage",
+     xlab = "Point Options",
+     cex = 0.8)
+rect.hclust((hclust(dist(scale(points, center = T, scale = T)))), k = 2, border = 2:3)
+```
+
+Explain which linkage you used and why you felt it was a better choice\
+<span style="color:red">I initially did this with the Wine one and could not at all read it. Anyways, for the points given I used average, only reason is that average is my normal go to. Given the size and how close A&B and C&D are, complete would most likely be a better option. That said, when I ran all three they literally all gave the exact same result.</span>\
+
+
+```{r}
+splitData <- createDataPartition(wine$Alcohol, p = 0.8, list = FALSE)
+trainData <- wine[splitData, ]
+testData <- wine[-splitData, ]
+```
+  
+```{r}
+wineBag <- randomForest(Alcohol~ ., data = trainData, mtry = 13)
+wineBag
+bagPred <- predict(wineBag, newdata = testData)
+```
+
+```{r}
+m <- sqrt(13)
+m
+m <- ceiling(m)
+m
+wineRF <- randomForest(Alcohol~ ., data = trainData, mtry = m)
+wineRF
+winePred <- predict(wineRF, newdata = testData)
+```
+
+```{r}
+plot(bagPred, testData$Alcohol, main = "Bagging Predictions of Alcohol", xlab = "Bag Prediction", ylab = "Alcohol Actual")
+abline(0,1, col = "red")
+plot(winePred, testData$Alcohol, main = "Random Forest Prediction of Alcohol", xlab = "RF Prediction", ylab = "Alcohol Actual")
+abline(0,1, col = "red")
+```
+
+Which tree worked best?\
+<span style="color:red">It is hard to say which did best. Going off purely the graphs they look almost identical. They both stray a decent amount from the abline, looking at the numbers specifically from "wineRF" and "wineBag", you can see that the numbers are also really close but Random Forest is ever so slightly better. The R^2 is slightly lower and the variance it covers is slightly more. The random forest model would also probably depend on the predictors used. In my case I used 4, from what I remember you saying that the square root of the predictors is a good rule of thumb for Random Forest. The square root was 3.6, I rounded up as it was closer to 4 and used 4 predictors.</span>\
+
+
+3. Evaluate a Bad Analysis:
+
+*You are given a situation, identify as many problems as you can with the way it was handled and provide ideas for solutions. You do not need to fix this, you simply need to help the author know what happened and how they could make it better.* 
+  
+Dr. Merl O. Tannin has come to you with a problem. His employee has submitted a report but Dr. Tannin doesn't have time to read it with all the extra work he has going on from the oenology conference coming up. He has entrusted to you this report and wants feedback.Read the following report and state problems and fixes that need to be made:
+
+---
+
+Report: Predicting Alcohol Content using Linear Regression
+Author: Oakley Barrel
+
+Data: 
+```{r}
+Dat <- read.csv(("Wine.csv"))
+```
+
+Model:
+```{r}
+Sub <- regsubsets(Alcohol~ ., data = Dat , nvmax = 13, method = "forward")
+summary(Sub)
+```
+
+```{r}
+Reg <- lm(Alcohol ~ Magnesium + OD280, data = Dat)
+summary(Reg)
+```
+
+> As you can see only Magnesium is important for evaluating Alcohol levels. The R squared is 0.076 which means it has captured about 92% of the variance and the intercept has the best t value so adjusting is the most important aspect to this model. The formula suggested for predicting Alcohol is:
+
+$$
+Alcohol = \beta_0 + 0.015187Magnesium + 0.062555OD280
+$$
+
+End Report
+
+```{r}
+summary(lm(Alcohol~ ., data = Dat))
+```
+
+---
+> Notes: \
+  - No use of train and test data for validation.\
+  - Misunderstood how to read regsubsets. Magnesium is not important, it is actually the least important. To see importance it is read from top down so it would actually be Proline first, next Color_Intensity.\
+  - Misunderstanding of R squared significance.  0.076 means 7.6% of the variance has been captured, not what was not captured.\
+  - The intercept has nothing to do with the model in this case. It's significance is simply a baseline for other predictors.\
+  - Another point is that when comparing the subset lm and the full lm is that looking at the estimates, you can see how little magnesium actually affects the alcohol content compared to everything else. If anything, it might actually reduces the alcohol content given it has a negative estimate.\
+  - Technically Magnesium is the most important, however, this is only in the context. Out of the two predictors used, Magnesium was the most important.\
+  - To add on to the previous, if you ever make a claim, state what was used, for example. "Out of the two predictors used, Magnesium was much more significant..." This allows it to be more clear and less room for misinterpretation or misunderstanding.\
+  - This is not so much an issue, but if you have the resources then use best subset selection. Forward selection classifies Proline as being the most significant yet it might not actually be the best due to the nature of forward step. For the best predictions then use best subset if plausible.
+
+  
