@@ -1,66 +1,29 @@
 ---
 title: "Mass Murder Project"
-output: html_notebook
 author: "Halan Badilla Osorio"
+output: html_notebook
 ---
 
-```{r}
-Sys.setenv(LANG = "en")
-```
+### **Introduction:**
 
+This report aims to predict fatality rates in any prior, currently occurring or future mass killings that occur. These predictions could prove useful for on the spot analysis of situations to coordinate how many resources will be needed on the scene to help rescue victims. The database used is called *"Mass Killings in America, 2006 - Present"*. This report makes use of four data sets for EDA and visualization but only uses three of the four data sets for the prediction models. In this analysis, four different models are used and are compared by evaluating their metrics as well investigating their strengths and weaknesses.\
 
-```{r}
-# All libraries. I don't think I ended up using them all but I don't want to find out which one I'm not using.
+#### **The models used in this report are the following:**\
+* **Elastic Net with Factorized Predictors:** Elastic Net is a regularized Generalized Linear Model (GLM) that uses both Lasso and Ridge regression to tune the α and λ hyperparameters to prevent overfitting and handle multicollinearity. This specific model used factorized categorical predictors.
+* **Elastic Net with Hot-Encoded Predictors:** Elastic Net is a regularized Generalized Linear Model (GLM) that uses both Lasso and Ridge regression to tune the α and λ hyperparameters to prevent overfitting and handle multicollinearity. This specific model used hot-encoded categorical predictors.
+* **Random Forest with Factorized Predictors:** Random Forest is a non-linear model that creates multiple decision trees at random and combines their outputs to improve accuracy of predictions. The randomness aspect allows it to inherently reduce overfitting. This model used factorized categorical predictors.
+* **XGBoost with Hot-Encoded Predictors:** Extreme Gradient Boosting (XGBoost) is a non-linear model that, like Random Forest, creates multiple decision trees. However, unlike Random Forest, XGBoost will build new trees to correct any errors in the previous ones. XGBoost also has regularization techniques incorporated to prevent overfitting. This model used hot-encoded categorical predictors.
 
-library(randomForest)
-library(factoextra)
-library(lubridate)
-library(tidyverse)
-library(corrplot)
-library(ggplot2)
-library(mapproj)
-library(hexbin)
-library(usmap)
-library(ISLR2)
-library(dplyr)
-library(caret)
-library(maps)
-library(MASS)
-library(pROC)
-library(car)
-library(sf)
-library(glmnet)
-library(xgboost)
-```
+### **DATA:**
 
-```{r}
-# Change working directory to whatever works best for you.
-setwd("C:/Users/halan/Desktop/FPU/Spring2025/StatisticalLearning/STA3241-Project-HalanBadilla-SP25/Data")
+As mentioned prior, the database used for this report is named *"Mass Killings in America, 2006 - Present".* For the sake of consistency, the data was gathered on March 16th, 2025 at 12:50PM. This is the only version of the data that is used to prevent any changes from future entries as this is a database that is still being constantly updated. This collection of mass murder information is a joint collaboration effort between Justin Myers, a veteran journalist for *"The Associated Press"* and James Alan Fox, a professor of Criminology, Law, Public Policy and a former dean at the Northeastern University in Boston, Massachusetts. He currently holds a Ph.D in Sociology, a master's degree in Statistics and a master's degree in Criminology.
 
-incidents <- read.csv("mass_killing_incidents_public.csv")
-offenders <- read.csv("mass_killing_offenders_public.csv")
-victims <- read.csv("mass_killing_victims_public.csv")
-weapons <- read.csv("mass_killing_weapons_public.csv")
-```
+Mass Murder for this data set is defined using the definition given by the FBI: \
+*"...the intentional killing of four or more victims by any means within a 24-hour period, excluding the death of unborn children and the offender(s)."*
 
-Here I open the four data sets that were used. All four are connected with an "incident_id" allowing you to see what information is connected.
+The database consists of four data sets: Incidents, Offenders, Victims, Weapons\
 
-```{r}
-# So you can view the tables.
-incidents
-offenders
-victims
-weapons
-```
-
-DATA: Mass Killing Database 2006 - Present (AS OF MARCH 15th 2025)
-
-This project makes use of four data sets which are all connected. All four data sets contain a column named "incident_id", an id which links all of them together to see what information is connected to what.
-
-Mass Murder for this data set is defined using the definition given by the FBI: 
-"...the intentional killing of four or more victims by any means within a 24-hour period, excluding the death of unborn children and the offender(s).)
-
-This Database is constantly being updated (Was just updated 2 hours ago as of March 16th, 2025 at 12:50PM) and is very trustworthy. The main contact for these data sets is Justin Myers. Justin Myers is a veteran journalist for "The Associated Press", they are also working with Northeastern University's James Alan Fox whom is also a contact.
+For the EDA all four data sets are used; however, Victims was dropped in the analysis as it would introduce data leakage due to the predictor being the fatality rate and the Victim data set only includes data on people that have been murdered.
 
 Features(Incident [19 Columns x 615 Rows]):
 
@@ -122,9 +85,73 @@ Features(Offenders [15 Columns x 788 Rows]):
 - <span style="color:red">sentence_type</span>: Type of sentence convicted (ie. Acquitted, Awaiting sentencing, Committed, Death sentence etc.)
 - sentence_details: Details about the sentence convicted.
 
+```{r, echo=FALSE}
+Sys.setenv(LANG = "en")
+```
+
+<details>
+<summary>Libaries used in this report. Click to view.</summary>
+```{r}
+library(randomForest)
+library(doParallel)
+library(factoextra)
+library(lubridate)
+library(tidyverse)
+library(corrplot)
+library(xgboost)
+library(ggplot2)
+library(mapproj)
+library(hexbin)
+library(glmnet)
+library(usmap)
+library(ISLR2)
+library(dplyr)
+library(caret)
+library(maps)
+library(MASS)
+library(pROC)
+library(car)
+library(sf)
+```
+</details>\
+
+```{r, echo=FALSE, warning=FALSE}
+# Change working directory to whatever works best for you.
+setwd("../Data")
+
+incidents <- read_csv("mass_killing_incidents_public.csv", show_col_types = FALSE)
+offenders <- read_csv("mass_killing_offenders_public.csv", show_col_types = FALSE)
+victims <- read_csv("mass_killing_victims_public.csv", show_col_types = FALSE)
+weapons <- read_csv("mass_killing_weapons_public.csv", show_col_types = FALSE)
+```
+
+## **Data Sets** {.tabset}
+
+### Incidents
+```{r}
+incidents
+```
+### Offenders
+```{r}
+offenders
+```
+### Victims
+```{r}
+victims
+```
+### Weapons
+```{r}
+weapons
+```
+
+Here are the four data sets gathered without any data manipulation being done.
+
+All four data sets contain incident_id as stated, this works as a primary key that allows you to see what information links to what information on another data set.\
+
+## **EDA Preprocessing:**\
+
 ```{r}
 # Replace empty cells in the situation_type column in incidents with "Unknown"
-
 incidents$situation_type[incidents$situation_type == ""] <- "Unknown"
 ```
 
@@ -139,94 +166,6 @@ varI <- incidents %>%
 transformedData <- usmap_transform(varI)
 ```
 
-For the sake of visualization, incident 342, the 2017 Las Vegas shooting incident was excluded as it is too much of an outlier to properly visualize information. To see the details, below I have provided the incident so you can see the details.
-
-```{r}
-# So anyone can see the information on that event.
-incidents[incidents$incident_id == 342, ]
-
-# Filtering the observation.
-tempData <- transformedData %>%
-  filter(incident_id != 342)
-
-```
-
-For these future visualizations there will be 2, one which will show case the deaths while the other showcases the amount of injured and alive survivors.
-For these first two, the data contains two cause of death, the first cause of death is what we will focus on but the second cause of death are any other means used by the offenders. For these two visualizations only the primary causes will be used.
-
-In this first one we can see rather clearly that the lead cause of deaths in mass murders is shootings. The runner up to this seems to be either stabbing or blunt force. In this graph and what you will notice in the other graphs as well is that in general the mid west is the much safer area relatively. The east coast specifically is strewn with mass murders of multiple different degrees.
-
-```{r, fig.width = 15, fig.height = 10}
-plot_usmap() + geom_sf(
-  data = tempData,
-  aes(color = firstcod, size = num_victims_killed),
-  alpha = .5) +
-  scale_size(range = c(2,10)) +
-  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
-  labs(title = "Primary Reason for Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "First Cause of Death", size = "Amount of Victims Murdered")
-
-```
-This visualization is similar to the last except it show cases the amount of injured victims. This means any victims that were part of the mass murder attempt and survived with injuries.  Similar to the last, a large portion of these correlate with the deaths, plenty of incidents occuring in the east, west and central US yet the mountaineous/midwest is much more barren in comparison. This could be a portrayal of simply the population to incidents but as I do not have population data it is hard to confirm that. 
-
-```{r, fig.width = 15, fig.height = 10}
-plot_usmap() + geom_sf(
-  data = tempData,
-  aes(color = firstcod, size = num_victims_injured),
-  alpha = .5) +
-  scale_size(range = c(2,10)) +
-  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
-  labs(title = "Primary Reason for Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "First Cause of Death", size = "Number of Injured Victims")
-
-```
-
-Next is the locations in which these incidents took place. Predominantly it seems like the majority of mass murders occurred in residences while the next closest being in universities or schools. Next it also seems like bars/clubs/restaurants are next making me believe that maybe there is a disproportionate amount of victims that may be in either in there 20s to 30s, around the age you are still in school and/or going out with friends (clubbing, eating, drinking, etc.)
-
-```{r, fig.width = 15, fig.height = 10}
-plot_usmap() + geom_sf(
-  data = tempData,
-  aes(color = location, size = num_victims_killed),
-  alpha = .5) +
-  scale_size(range = c(2,10)) +
-  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
-  labs(title = "Location and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Location", size = "Number of Murdered Victims")
-```
-With what you can see in this visualization of the surviving victims, residences still dominate with sheer amount, however, this also showcases that a lot more people are surviving mass murder attempts in general and not just in residences. One may conclude that your chances of surviving may go up significantly if out in public but it is too early to state this as fact.
-
-```{r, fig.width = 15, fig.height = 10}
-plot_usmap() + geom_sf(
-  data = tempData,
-  aes(color = location, size = num_victims_injured),
-  alpha = .5) +
-  scale_size(range = c(2,10)) +
-  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
-  labs(title = "Location and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Location", size = "Amount of Injured Victims")
-```
-Here it is actually somewhat difficult to tell what may be the most prevalent type of incidents. It seems like most of the incidents were indiscriminate or family issues. That said, the amount by which they be the most is not very high so across the board it looks like most situations could escalate to this degree. 
-
-```{r, fig.width = 15, fig.height = 10}
-plot_usmap() + geom_sf(
-  data = tempData,
-  aes(color = situation_type, size = num_victims_killed),
-  alpha = 0.8) +
-  scale_size(range = c(2,10)) +
-  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
-  labs(title = "Type of Incident and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Type of Situation", size = "Amount of Murdered Victims")
-
-```
-Not much else to say here however it is worth noting the amount of bigger zones of injured victims compared to deaths. While it shows more people were endangered it also shows that there were plenty of survivors as well which is note worthy. Most of these were indiscriminate but there are a few others like despondency, terrorism and arson.
-
-```{r, fig.width = 15, fig.height = 10}
-plot_usmap() + geom_sf(
-  data = tempData,
-  aes(color = situation_type, size = num_victims_injured),
-  alpha = 0.8) +
-  scale_size(range = c(2,10)) +
-  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
-  labs(title = "Type of Incident and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Type of Situation", size = "Number of Injured Victims")
-
-```
-
-
 ```{r}
 # Getting a count of the incidents per state
 stateIncidents <- incidents %>%
@@ -237,20 +176,6 @@ stateIncidents <- stateIncidents %>%
   mutate(fillColor = ifelse(n>=40, "40+", ifelse(n>=20, "20-39", "0-19")))
 ```
 
-Here are bar graph statistics showcasing all of the incidents from the data set and showing them from most to least in a bar graph form. From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occurring) locations in the US. Florida being an honorable mention for fourth place. From here on I could also then further test to check the amount of victims, whilst this graph shows the most mass killings in occurrence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
-
-One notable mention for these next three graphs is that I left in the Las Vegas shooting and that is due to the nature of the situation. As of this day, there is still no verified reason for why the offender did what he did, however, there has been speculation to what it could be and a lot of people assume it may have something to do with his gambling. Las Vegas being essentially the hub of night life, party, gambling, all of the above, I decided to include it as even though it is an outlier in this data set, I believe it is still likely enough for another occurrence to partake if that is the reason to be believed.
-
-```{r, fig.width = 10, fig.height = 10}
-# Creating the graph and organizing by amount
-ggplot(stateIncidents, aes(x = reorder(state, +n), y = n, fill = fillColor)) + 
-  geom_bar(stat = 'identity', width = 0.8) + 
-  geom_text(aes(label = n), hjust = -.25) +
-  scale_fill_manual(values = c("0-19" = "gold", "20-39" = "orange", "40+" = "red")) +
-  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
-  labs(title = "Total Incidents Per State", x = "States", y = "Amount of Incidents", fill = "Incident Ranges") +
-  coord_flip()
-```
 ```{r}
 # Getting a sum of the amount of both victims killed and injured per state
 deadlynessPerState <- incidents %>%
@@ -263,32 +188,6 @@ deadlynessPerState <- deadlynessPerState %>%
          fillColorInjury = ifelse(totalInjured>=200, "200+", ifelse(totalInjured>=100, "100-199", "0-99")))
 ```
 
-And here I checked the amount of deaths per state. The top states stayed relatively the same however it is worth noting that while Illinois had more occurrences, it seems that there were more deadly incidents in Florida as it ended up overtaking Illinois as the 3rd.
-
-```{r, fig.width = 10, fig.height = 10}
-ggplot(deadlynessPerState, aes(x = reorder(state, +totalDeaths), y = totalDeaths, fill = fillColorDeath)) +
-  geom_bar(stat = 'identity', width = 0.9) +
-  geom_text(aes(label = totalDeaths), hjust = -.25) +
-  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "red")) +
-  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
-  labs(title = "Total Victims Murdered Per State", x = "States", y = "Amount Murdered", fill = "Death Ranges") +
-  coord_flip()
-```
-
-Another measurement of deadliness/lethality would be the amount of injured people. Luckily, this means that everyone here survived the occurrences yet it also displays how many more people were involved in the situations leading to more a wide spread problem. What is notable is that Nevada has overtaken every state my a large margin and this is due to the aforementioned Las Vegas shooting of 2017. Again, luckily, a lot of people were able to survive that attack but many were injured, 850+ to be exact. This level of malice could potentially occur again due to the nature of Las Vegas so it is something to be mindful of and I believe noteworthy enough to keep in. 
-
-Next, Texas and California are the 2nd and 3rd with most injured victims respectively. Something to be mindful though is that Florida is 5th while also being higher in the other visualizations which could be inferred as Florida actually being worse as it is possible that it means that if you are in a mass murder attempt in Florida, you may be less likely to survive.
-
-```{r, fig.width = 10, fig.height = 10}
-ggplot(deadlynessPerState, aes(x = reorder(state, +totalInjured), y = totalInjured, fill = fillColorInjury)) +
-  geom_bar(stat = 'identity', width = 0.9) +
-  geom_text(aes(label = totalInjured), hjust = -.25) +
-  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "red")) +
-  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
-  labs(title = "Total Injured Victims Per State", x = "States", y = "Amount of Injured", fill = "Injury Ranges") +
-  coord_flip()
-```
-
 ```{r}
 # Getting a count of the incidents per state
 weaponCount <- weapons %>%
@@ -298,19 +197,6 @@ weaponCount <- weapons %>%
 stateIncidents <- stateIncidents %>%
   mutate(fillColor = ifelse(n>=40, "40+", ifelse(n>=20, "20-39", "0-19")))
 ```
-
-This bar graph lets us see what is the most prevalent means of murder that was used. Some are a little weird to classify as a weapon but what it means is what was used. This graph actually supports our prior observation how guns are by far the most prevalent. The usage difference is staggering, all the others combined do not even add to half of the usage of weapons.
-
-```{r, fig.width = 10, fig.height = 5}
-ggplot(weaponCount, aes(x = reorder(weapon_type, +n), y = n, fill = weapon_type)) +
-  geom_bar(stat = "identity", width = 0.9) +
-  geom_text(aes(label = n), hjust = -.25) +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold"), legend.position = "none") +
-  labs(title = "Total Amount of Weapon Types Used", x = "Weapon Type", y = "Count") +
-  coord_flip()
-```
-
-
 
 ```{r}
 # Getting rid of N/A
@@ -329,24 +215,172 @@ victimCountRace <- victimsClean%>%
   count(race)
 ```
 
-With this Violin plot (+ Boxplot) we can see the general distribution of the victims as well as the medians. Generally it seems that females and males are both on average not too dissimilar 1497M VS 1656F > 47.5% to 52.5%. Proportionally however, the age of which they died does not seem to matter despite the sex. The unknown seems to be cases which the bodies were recovered but maybe not able to be identified as these cases have little to no information to them
+## **EDA:**\
+For the sake of visualization, incident 342, the 2017 Las Vegas shooting incident was excluded as it is too much of an outlier to properly visualize information. To see the details, below I have provided the incident so you can see the details.
 
-```{r, fig.width = 5, fig.height = 5}
+```{r, echo=FALSE}
+# So anyone can see the information on that event.
+incidents[incidents$incident_id == 342, ]
+
+# Filtering the observation.
+tempData <- transformedData %>%
+  filter(incident_id != 342)
+
+```
+
+For these future visualizations there will be 2, one which will showcase the deaths while the other showcases the amount of injured (And alive) survivors.\
+
+The data set includes firstcod, first cause of death, and secondcod, second cause of death. First is the primary method and second is if there was a secondary method of murder. Given that the first cause of death is the primary method of murder only the primary causes will be used for these visualizations.\
+
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = firstcod, size = num_victims_killed),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Primary Reason for Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "First Cause of Death", size = "Amount of Victims Murdered")
+
+```
+In this first map one we can see rather clearly that the lead cause of deaths in mass murders is shootings. The runner up to this seems to be either stabbing or blunt force. Something to point out is that in all of these visualizations, the mid west is a much safer area relative to everywhere else. For this plot, one can see that east coast specifically is strewn with mass murders of multiple different degrees as well as the edge of the west coast.
+
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = firstcod, size = num_victims_injured),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Primary Reason for Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "First Cause of Death", size = "Number of Injured Victims")
+
+```
+This visualization is similar to the last except it showcases the amount of injured victims. This means any victims that were part of the mass murder attempt and survived with injuries.  Similar to the last, a large portion of these correlate with the deaths, plenty of incidents occurring in the east, west and central US (Central Time Zone) yet the mountainous/Midwest is much more barren in comparison. This could be a portrayal of simply the population to incidents but as I do not have population data it is impossible to confirm that. 
+
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = location, size = num_victims_killed),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Location and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Location", size = "Number of Murdered Victims")
+```
+Next is the locations in which these incidents took place. Predominantly it seems like the majority of mass murders occurred in residences while the next closest being in universities or schools. It also seems like bars/clubs/restaurants are next making me believe that maybe there is a disproportionate amount of victims that may be in either in there 20s to 30s, around the age you are still in school and/or going out with friends (clubbing, eating, drinking, etc.)
+
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = location, size = num_victims_injured),
+  alpha = .5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Location and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Location", size = "Amount of Injured Victims")
+```
+With what you can see in this visualization of the surviving victims, residences still dominate with sheer amount, however, this also showcases that a lot more people are surviving mass murder attempts in general and not just in residences. One may conclude that your chances of surviving may go up significantly if out in public but it is too early to state this as fact.
+
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = situation_type, size = num_victims_killed),
+  alpha = 0.5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Type of Incident and Amount of Victim Deaths", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Type of Situation", size = "Amount of Murdered Victims")
+
+```
+With this plot it is difficult to tell definitively what may be the most prevalent type of incidents but indiscriminate situations do have the most amount of extreme cases.
+
+
+```{r, fig.width = 15, fig.height = 10}
+plot_usmap() + geom_sf(
+  data = tempData,
+  aes(color = situation_type, size = num_victims_injured),
+  alpha = 0.5) +
+  scale_size(range = c(2,10)) +
+  theme(legend.position = "right", legend.key.size = unit(6, 'mm'), plot.title=element_text(hjust=0.5, face = "bold", size = 14), legend.text = element_text(size = 14), legend.title = element_text(size = 14), plot.caption = element_text(size = 14)) +
+  labs(title = "Type of Incident and Amount of Injured Victims", caption = "-The 2017 Las Vegas Shooter has been excluded for clarity. That event had 60 deaths and 867 injured.", color = "Type of Situation", size = "Number of Injured Victims")
+
+```
+With this plot it is worth noting the amount of bigger zones of injured victims compared to deaths. While it shows more people were endangered it also shows that there were plenty of survivors as well meaning that there is either a high survival rate or in the extreme cases, many people are injured but many survived. Out of all the extreme cases, many of them were indiscriminate but there are a few others like despondency, terrorism and arson.\
+\
+\
+
+
+
+Next are the bar graph statistics showcasing all of the incidents from the data set and showing them from most to least in a bar graph form.
+
+Unlike the prior plots, the Las Vegas shooting was included in these and that is due to the nature of the situation. As of this day, there is still no verified reason for why the offender did what he did, however, there has been speculation to what it could be and a lot of people assume it may have something to do with the offender's gambling addiction. Las Vegas is known to be the hub for night life, partying, gambling, all of the above, This was a deciding factor to include it as even though it is an outlier in this data set, there is a very real potential for another similar occurrence if those reasons are to be believed.
+
+```{r, fig.width = 10, fig.height = 10}
+# Creating the graph and organizing by amount
+ggplot(stateIncidents, aes(x = reorder(state, +n), y = n, fill = fillColor)) + 
+  geom_bar(stat = 'identity', width = 0.8) + 
+  geom_text(aes(label = n), hjust = -.25) +
+  scale_fill_manual(values = c("0-19" = "gold", "20-39" = "orange", "40+" = "red")) +
+  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
+  labs(title = "Total Incidents Per State", x = "States", y = "Amount of Incidents", fill = "Incident Ranges") +
+  coord_flip()
+```
+From this we can see that California, Texas and Illinois are the three most dangerous (in the sense of the most mass murders occurring) locations in the US with Florida being a close to 3rd most. This graph shows the most mass killings in occurrence for the past ~20 years, that does not necessarily pertain to deadliness as there may be other states that have less but more severe mass murders.
+
+
+
+```{r, fig.width = 10, fig.height = 10}
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalDeaths), y = totalDeaths, fill = fillColorDeath)) +
+  geom_bar(stat = 'identity', width = 0.9) +
+  geom_text(aes(label = totalDeaths), hjust = -.25) +
+  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "red")) +
+  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
+  labs(title = "Total Victims Murdered Per State", x = "States", y = "Amount Murdered", fill = "Death Ranges") +
+  coord_flip()
+```
+This shows the total amount of deaths per state. The top states stayed relatively the same however it is worth noting that while Illinois had more occurrences, it seems that there were more deadly incidents in Florida as it ended up overtaking Illinois as the top third spot.
+
+```{r, fig.width = 10, fig.height = 10}
+ggplot(deadlynessPerState, aes(x = reorder(state, +totalInjured), y = totalInjured, fill = fillColorInjury)) +
+  geom_bar(stat = 'identity', width = 0.9) +
+  geom_text(aes(label = totalInjured), hjust = -.25) +
+  scale_fill_manual(values = c("0-99" = "gold", "100-199" = "orange", "200+" = "red")) +
+  theme(axis.text = element_text(size = 13, face = "bold"), plot.title = element_text(size = 14, face = "bold", hjust = 0.5), legend.title = element_text(size = 15), legend.position = "bottom", legend.text = element_text(size = 13), axis.title = element_text(size = 13, face = "bold")) +
+  labs(title = "Total Injured Victims Per State", x = "States", y = "Amount of Injured", fill = "Injury Ranges") +
+  coord_flip()
+```
+Another measurement of deadliness would be the amount of injured people. Luckily, this means that everyone here survived the occurrences yet it also displays how many more people were involved in the situations leading to more a wide spread problem. What is notable is that Nevada has overtaken every state by a large margin and this is due to the aforementioned Las Vegas shooting of 2017. There were many people killed in this attack but luckily many were survived (850+) albeit, injured. This level of malice could potentially occur again due to the nature of Las Vegas so it is something to be mindful of and the reason for why it was included. 
+
+Texas and California are the 2nd and 3rd with most injured victims respectively. Something to be mindful though is that Florida is 5th while also being higher in the other visualizations which could be inferred as Florida actually being more deadly as it is possible that it means that if you are in a mass murder attempt in Florida, you may be less likely to survive.
+
+
+```{r, fig.width = 10, fig.height = 5}
+ggplot(weaponCount, aes(x = reorder(weapon_type, +n), y = n, fill = weapon_type)) +
+  geom_bar(stat = "identity", width = 0.9) +
+  geom_text(aes(label = n), hjust = -.25) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), legend.position = "none") +
+  labs(title = "Total Amount of Weapon Types Used", x = "Weapon Type", y = "Count") +
+  coord_flip()
+```
+This bar graph shows the most prevalent weapon used across all of the mass murder incidents. Some classifications are not necessarily what a normal weapon is defined as, however, it still is what was used to murder. This graph supports the prior observation of shootings being a lead occurence for mass murder as guns are the most used weapon across the data set. The usage difference is staggering, all of the other weapons combined do not add up to half of the total of gun related incidents.
+
+
+```{r, fig.width = 8, fig.height = 8}
 ggplot(victimsClean, aes(x = sex, y = age, fill = sex)) +
   geom_violin(trim = TRUE, alpha = 0.9, scale = "width") +
   geom_boxplot(width = 0.1) +
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold")) +
   labs(title = "Showcase Density of Victims' Sex to Age", x = "Sex", y = "Age")
 ```
-
 ```{r}
 victimCountSex
 ```
-Similar to the violin plot above but this one goes over the race to age. Unlike the sex one it seems there is some form of disproportion based on race. Whether this is due to the crime or targetting them is still too early to say, however, it seems that on average hispanic/latino and black people are more likely to be a victim in these mass murders at the average age of ~25. American Indian is around ~30 and Asian/Pacific Islander with White average at around ~35.
+With this Violin plot (+ Boxplot) we can see the general distribution of the victims as well as the medians. Generally it seems that females and males are both on average not too dissimilar 1432M VS 1310F > 52.2% VC 47.8%. Proportionally however, the age of which they died does not seem to matter despite the sex. The unknown cases have been removed but those were very few and they were cases in which there was little to no information on the victim or their data was unrecoverable.
+The table right below the violin plot shows the amount of people in their respective groups.
 
-```{r, fig.width = 10, fig.height = 10}
+```{r, fig.width = 8, fig.height = 8}
 # Commented out Jitter as too many observations causes visual clutter.
-
 ggplot(victimsClean, aes(x = race, y = age, fill = race)) +
   #geom_jitter(shape = 16, position=position_jitter(0.2), alpha = 0.6) + 
   geom_violin(trim = TRUE, alpha = 0.9, scale = "width") +
@@ -354,41 +388,16 @@ ggplot(victimsClean, aes(x = race, y = age, fill = race)) +
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold")) +
   labs(title = "Showcase Density of Victims' Race to Age", x = "Race", y = "Age")
 ```
-
 ```{r}
 victimCountRace
 ```
+This is a similar violin plot to the one above but this one goes over the race to age. Unlike the prior, this one contains disproportionality regarding race. Whether this is due to the crime or targeting is still too early to say, however, it seems that on average Hispanic/Latino and Black people are more likely to be a victim in these mass murders at the average age of ~25. American Indian is around ~30 and Asian/Pacific Islander with White average at around ~35.
+The table below the violin plot shows the amount of people that fall under their respective groups.
 
-I recalled in the past that there was a discriminatory attack at the gay Orlando night cub named Pulse. This made me wonder if there were any other discriminatory attacks, while that incident was chalked up to terrorism, it still was an attack on a location where the target audience was predominantly gay men. 
-Here I was checking if there are any other discriminatory attacks against gay people searching through the narratives for the term "gay", surprisingly, out of all the ones in the US only one showed up, which is the same one from above that occurred in Orlando.
+## **Model Preprocessing:**\
 
-Surprisingly enough, out of the 600+ incidents there were barely any that specifically were targeting people whether it be for their sexual orientation or just racism. Of course, this was looking through the narrative to see if there were any that may not have been included in the situation_type of "Hate" and the only one not there was the Orlando Nightclub shooting and this is due to later further evidence of it being categorized as a terrorist attack as the offender had affiliations to ISIS.
-
-```{r}
-# With grepl I can search for specific words in the narrative or any other of the strings of texts that give narratives.
-incidents %>%
-  filter(grepl("gay", narrative))
-
-incidents %>%
-  filter(grepl("lesbian", narrative))
-
-incidents %>%
-  filter(grepl("queer", narrative))
-
-incidents %>%
-  filter(grepl(" anti", narrative))
-
-incidents %>%
-  filter(grepl("LGBT", narrative))
-
-incidents %>%
-  filter(situation_type == "Hate")
-
-```
-
-
-```{r}
-# Fixing the date and adding extra date columns.
+```{r, warning=FALSE}
+# Fixing the date and adding extra date columns for year, month, day and weekday.
 incidentsUpdated <- incidents %>%
   mutate(
     date = as.Date(date),
@@ -400,6 +409,8 @@ incidentsUpdated <- incidents %>%
 
 # Makes a temp var "DTIRatio" Death To Injured Ratio
 incidentsUpdated$DTIRatio <- incidentsUpdated$num_victims_killed / (incidentsUpdated$num_victims_killed + incidentsUpdated$num_victims_injured)
+
+# Logging the output
 incidentsUpdated$DTIRatioLog <- log(incidentsUpdated$DTIRatio)  
 
 
@@ -416,20 +427,19 @@ offenderSum <- offenders %>%
 weaponSum <- weapons %>%
   subset(select = c(incident_id, weapon_type, gun_class, gun_type))
   
-# Merging the data
+# Merging the data with left join
 totalData <- incidentsSum %>%
   left_join(offenderSum, by = "incident_id") %>%
   left_join(weaponSum, by = "incident_id")
 
+# Gives any N/A values in gun_type and turns them to "No Gun"
+totalData$gun_type[is.na(totalData$gun_type)] <- "No Gun"
+
 # Omit any N/A rows
 totalData <- na.omit(totalData)
 
-# Turns any blank cells to "Unknown"
-totalData[totalData == ""] <- "Unknown"
-
-any(is.na(totalData))
-
-totalData
+# Check to see if there is any N/A left.
+# any(is.na(totalData))
 ```
 
 ```{r}
@@ -438,102 +448,157 @@ charEncode <- c("weekday", "state", "situation_type", "location", "offenderRace"
 ```
 
 ```{r}
-# This will factorize all of the data instead of having to manually do it
+# This will remove incident_id as it is no longer needed.
 totalData <- totalData %>% 
   dplyr::select(-incident_id)
 
+# This will factorize all of the data instead of having to manually do it
 totalDataFactored <- totalData %>%
   mutate(across(all_of(charEncode), ~ as.integer(factor(.x))))
 
-totalDataFactored
+# totalDataFactored
 ```
 
 ```{r}
-# This will be hot encoded for the other models
+# Make dummy variables for all of the categorical columns
 dummyModel <- dummyVars(DTIRatioLog ~ ., data=totalData, levelsOnly = TRUE)
+
+# Turns dummyModel into a matrix of encoded variables
 encodedData <- predict(dummyModel, totalData)
 
+# Converts the matrix into a data frame
 encodedData <- as.data.frame(encodedData)
 
+# Set all of the numeric vars into numericVars to readd later
 numericVars <- setdiff(names(data), c(charEncode, "DTIRatioLog"))
+
+# Combines all of the data back together
 totalDataEncoded <- cbind(encodedData, totalData[numericVars], DTIRatioLog = totalData$DTIRatioLog)
 
-totalDataEncoded
+# totalDataEncoded
 ```
 
-
+### **Train and Test Data:**
 ```{r}
-# Holdout Test Data
-# Need two as one is factored and the other is hot encoded. They use the same predictors
+# Creating train and test data
+# Train and test data for factored set
 splitDataFactored <- createDataPartition(totalDataFactored$DTIRatioLog, p = 0.8, list = FALSE)
 trainDataFactored <- totalDataFactored[splitDataFactored, ]
 testDataFactored <- totalDataFactored[-splitDataFactored, ]
 
+# Train and test data for hot-encoded set
 splitDataEncoded <- createDataPartition(totalDataEncoded$DTIRatioLog, p = 0.8, list = FALSE)
 trainDataEncoded <- totalDataEncoded[splitDataEncoded, ]
 testDataEncoded <- totalDataEncoded[-splitDataEncoded, ]
 ```
 
+Here the data is being split. Two train and test sets needs to be created due to having a factored and encoded set. The train sets will be 80% of the total data while the last 20% will be left for testing. This is applied on both the same way.
+
+### **Cross Validation Training Method:**
 ```{r}
 # K-Fold Train Control
 set.seed(789)
 train_control <- trainControl(method = "cv", number = 5, verboseIter = FALSE)
 ```
 
-```{r, fig.width = 8, fig.height = 8}
+This is the cross validation training method. This method will split the data into 5 parts. It will train the model on 4 parts and then validate on the last one. It will repeat this process 5 times in total while also rotating which fold will be the validating part each iteration.\
+
+## **Methodology:**\
+
+```{r, fig.width = 5, fig.height = 5}
 # This is so that I can use it in the corr matrix but also make my life easier
 corFactorData <- totalDataFactored
 corFactorData$DTIRatioLog <- as.numeric(corFactorData$DTIRatioLog)
 
+# Correlation Matrix
 corM <- cor(corFactorData)
 corrplot(corM, method = "color")
-heatmap(corM, symm = TRUE, main = "Correlation Heatmap")
 ```
 
+This correlation matrix is used to see the correlation between the predictors that will be used.
+A lot of this data is categorical so this matrix is a great way of seeing correlation but between specific predictors it is useful.\n\n
+There is a slight correlation between the situation_type and weekday, this could mean that specific situations are more likely to occur on specific days. An example of this would be if there was a hate or anti-religious murder on a Sunday (or any other religious day)\
+
+There is also a negative relationship between the offender's age and how many offenders there are. This could reflect patterns in offenders, it would indicate that older people are more likely to work alone whereas younger offenders would commit acts in groups. A brief example of this would be gang violence, generally gang members do not live to be that old due to the nature of gang life so this would support what the correlation shows.
+Any other interpretations would be difficult to say for certain as much of this data is categorical.\
+
+### **Elastic Net Model - Hot-Encoded:**
 ```{r}
-lmModel <- lm(DTIRatioLog ~ .-incident_id, data = trainData)
-lmPred <- predict(lmModel, testData)
-
-```
-
-
-```{r}
-# Logistic Regression (Elastic Net, Ridge + Lasso)
+# Elastic Net, Ridge + Lasso
+totalTimeENHE <- system.time({
 elasticModelE <- train(DTIRatioLog ~ ., data = trainDataEncoded, method = "glmnet", trControl = train_control, tuneLength = 10)
-print(elasticModelE)
+})
 ```
+
+```{r, echo=FALSE}
+cat("Model training took", totalTimeENHE["elapsed"], "seconds\n")
+cat("Best alpha:", elasticModelE$bestTune$alpha, "\n")
+cat("Best lambda:", elasticModelE$bestTune$lambda, "\n")
+```
+Alpha is the tuning parameter that dictates whether it is using more ridge or lasso. 0.9 means that is preferred only Lasso regression and only used very minimal amounts of Ridge regression selection.
+Lambda is the tuning parameter that dictates the regularization strength. 0.004 is a extremely small lambda meaning it did not need to shrink coefficients almost at all.
 
 ```{r}
 elasticPredE <- predict(elasticModelE, testDataEncoded)
 elasticMetricsE <- postResample(elasticPredE, testDataEncoded$DTIRatioLog)
 ```
 
+### **Elastic Net Model - Factorized:**
 ```{r}
 # Now trying with factored data.
+totalTimeENF <- system.time({
 elasticModelF <- train(DTIRatioLog ~ ., data = trainDataFactored, method = "glmnet", trControl = train_control, tuneLength = 10)
-print(elasticModelF)
+})
 ```
+
+```{r, echo=FALSE}
+cat("Model training took", totalTimeENF["elapsed"], "seconds\n")
+cat("Best alpha:", elasticModelF$bestTune$alpha, "\n")
+cat("Best lambda:", elasticModelF$bestTune$lambda, "\n")
+```
+Alpha is the tuning parameter that dictates whether it is using more ridge or lasso. 0.1 means that is preferred ridge regression much more and only used very minimal lasso variable selection. 
+Lambda is the tuning parameter that dictates the regularization strength. 0.026 is also rather small lambda meaning it did not need to shrink coefficients much at all but still slightly more than the hot-encoded model.
+
 ```{r}
 elasticPredF <- predict(elasticModelF, testDataFactored)
-elasticMetricsF <- postResample(elasticPredF, testDataFactored$DTIRatio)
+elasticMetricsF <- postResample(elasticPredF, testDataFactored$DTIRatioLog)
 ```
 
+### **Random Forest Model:**
 ```{r}
 # Making train model for random forest
-rfModelF <- train(DTIRatioLog ~ ., data = trainDataFactored, method = "rf", trControl = train_control, tuneLength = 10)
-print(rfModelF)
-
+totalTimeRF <- system.time({
+  rfModelF <- train(DTIRatioLog ~ ., data = trainDataFactored, method = "rf", trControl = train_control, tuneLength = 10)
+})
 ```
+
+```{r, echo=FALSE}
+cat("Model training took", totalTimeRF["elapsed"], "seconds\n\n")
+cat("Best mtry:", rfModelF$bestTune$mtry, "\n\n")
+head(rfModelF$finalModel$importance, 5)
+#print(rfModelF)
+```
+
+MTRY is the amount of predictors the model will use when considering its splits. It found that 4 predictors per split was the ideal method.\n\n
+
+IncNodePurity measures how much a variable reduces impurity (i.e., error) across all decision trees in the Random Forest. The top five predictors were shown: weekday, state, num_offenders, situation_type and location. A higher value indicates a more important variable. For example, location had the highest IncNodePurity score (47.5), meaning it contributed the most to reducing prediction error and was the strongest predictor in the model.
+
 ```{r}
 rfPredF <- predict(rfModelF, testDataFactored)
 rfMetricsF <- postResample(rfPredF, testDataFactored$DTIRatioLog)
 ```
 
-```{r}
+### **XGBoost Model:**
+```{r, warning=FALSE}
 # XGBoost
-xbgModelE <- train(DTIRatioLog ~ ., data = trainDataEncoded, method = "xgbTree", trControl = train_control, tuneLength = 10)
-xgbModelE <- xbgModelE # NO WAY am I rerunning this. With the training it took roughly 45 minutes. I do not have the time for that so I am just copying the results to this instead of rerunning it.
-print(xgbModelE)
+totalTime <- system.time({
+xgbModelE <- train(DTIRatioLog ~ ., data = trainDataEncoded, method = "xgbTree", trControl = train_control, tuneLength = 10, verbosity = 0)
+})
+```
+
+```{r, echo=FALSE}
+cat("Model training took", totalTime["elapsed"], "seconds\n")
+#print(xgbModelE)
 ```
 
 ```{r}
@@ -541,7 +606,9 @@ xgbPredE <- predict(xgbModelE, testDataEncoded)
 xgbMetricsE <- postResample(xgbPredE, testDataEncoded$DTIRatioLog)
 ```
 
-```{r}
+
+### **Model Comparison / Analysis:**
+```{r, echo=FALSE}
 cat("\nMetrics for Elastic Net Regression with Hot-Encoded Predictors:\n")
 print(elasticMetricsE)
 cat("\nMetrics for Elastic Net Regression with Factorized Predictors:\n")
@@ -551,29 +618,65 @@ print(rfMetricsF)
 cat("\nMetrics for XGBoost with Hot-Encoded Predictors:\n")
 print(xgbMetricsE)
 ```
-ENR (Elastic Net Regression) Hot-Encoded:
--RMSE: Lower RMSE shows that the model fits the data decently.
--RSquared: 79% of the variance was explained by the model.
--MAE: The prediction error is relatively low. Means that it predicts decent without too much error.
+ENR (Elastic Net Regression) Hot-Encoded:\n
+-RMSE: Lower RMSE shows that the model fits the data decently.\n
+-RSquared: 60% of the variance was explained by the model.\n
+-MAE: The prediction error is relatively low. Means that it predicts decent without too much error.\n\n
 
-ENR Factorized:
--RMSE: Worse than the hot-encoded, predicts worse.
--RSquared: Only ~35% of the variance is explained. Much worse than hot-encoded.
--MAE: Higher MAE is worse than hot-encoded. In general the predictions are even less accurate.
+ENR Factorized:\n
+-RMSE: Worse than the hot-encoded, predicts worse.\n
+-RSquared: Only ~12% of the variance is explained. Much worse than hot-encoded.\n
+-MAE: Higher MAE is worse than hot-encoded. In general the predictions are even less accurate.\n\n
 
-RF Factorized:
--RMSE: Quite low, lower than ENR H-E, quite strong predictions. Fits the data rather well.
--RSquared: 88% of the variance was explained, better than any other so far.
--MAE: Very low MAE shows that it makes a lot less errors on average when it predicts.
+RF Factorized:\n
+-RMSE: The lowest out of all the models. Strong predictions. Fits the data well.\n
+-RSquared: 86% of the variance was explained, better than any others.\n
+-MAE: Very low MAE shows that it makes a lot less errors on average when it predicts.\n\n
 
-XGBoost Hot-Encoded:
--RMSE: The lowest RMSE. The most accurate out of the bunch.
--RSquared: Very high, captures ~94% of the variance.
--MAE: EXTREMELY low MAE. The closest to the actual values with VERY little error.
+XGBoost Hot-Encoded:\n
+-RMSE: The second lowest RMSE. The very accurate and close to Random Forest.\n
+-RSquared: Captures 75% of the variance.\n
+-MAE: Extremely low MAE. The closest to the actual values with VERY little error.\n\n
 
-XGBoost is by far the best model here, this would be a good model to use when predicting for the fatality rate (Death to Injury+Death Ratio). Of course, in a real world setting and if you need very fast computations, RF model would be the way to go. RF predicted very well with only a fraction of the time needed whereas XGBoost gave much better results but took about 6-7 times as long to compute. Of course, this would depend on your processing speed but even with my setup, (6 Core 4.2GHz CPU and with 32GB DDR4 1577 RAM) it took roughly 45 minutes to run a XGBoost with a tuneLength of 10 and train CV cycle of 5. It needed to run 50 different simulations taking around ~54 seconds per iteration. This is on the faster end and realistically may not be viable if this model is to be applied to a situation in which speed is a priority or the computational resources are not sufficient.
+Random Forest is by far the best model in this scenario, this would be a good model to use when predicting for the fatality rate (Death to Injury+Death Ratio). Random Forest has a relatively low elapsed time, especially when compared to XGBoost, and it boasts high accuracy scores with minimal error. \n\n
 
-In conclusion:
-Elastic Net Regression (With Hot-Encoded Variables): Is the quickest but drops the most in accuracy.
-RF: The model to choose when you need quicker but accurate results.
-XGBoost: The best model but takes much longer.
+Something to note, when running this multiple times to project the findings, initially, XGBoost had much higher accuracy metrics than Random Forest. Metrics are going to change, that is the nature of the training and test sets but for the sake of time this last attempt will be kept as regardless of the performance with XGBoost, time is of the essence and if this were to be used in a real world setting, Random Forest would be a better option as it gets very high accuracy metrics with only a small fraction of the time it takes for XGBoost.\n
+
+## **Conclusion:**
+
+To conclude, this report is a comprehensive predictive analysis on the fatality rates during mass killings in the US from 2006 to the Present (March 16th, 2025.) This database was compiled by two well renowned individuals. Justin Myers, a journalist for *"The Associated Press"* and a highly esteemed Criminology professor from the Northeastern University in Boston, Massachusetts, James Alan Fox. The objective was to build and test different predictive models that would then be compared by their accuracy metrics and the time taken to run these models. These predictive rates could be used in real world scenarios in which time is of the essence for emergency response times and planning. The random forest model also shows the importance of certain predictors allowing potential for future policy amendments to potentially lower fatality rates or lowering mass killings as a whole.\n\n
+
+Extensive cleaning was performed on the four data sets. Among the four, only three of them were used in the predictive process: Incidents, offenders and weapons. Victim data was dropped as it introduced potential data leakage increasing the accuracy unfairly causing extremely high accuracy metrics that were not accurate to how good the models really were. A multitude of other columns were also dropped as they would have no impact in the predictive process. Eventually, after the data cleaning aspect, the amount of features was dropped from 42 features down to 12. \n\n
+
+After the data was cleaned four predictive models were implemented, these models were then trained, tested and compared. The four predictive models were:\n
+* Elastic Net with Hot-Encoded Predictors
+* Elastic Net with Factorized Predictors
+* Random Forest with Factorized Predictors
+* XGBoost with Hot-Encoded Predictors
+
+The performance metrics used to compare the four models were RMSE, MAE, RSquared and Elapsed Time. RMSE, MAE and RSquared are standard metrics used to compare the models predictive capabilities but Elapsed Time was added to compare processing speeds. Out of the four, Random Forest did the best across most metrics except for MAE and Elapsed Time. In prior iterations ran, there were times where the metrics showcased XGBoost to be a better model, but regardless of the accuracy, the amount of time it takes for an XGBoost model to run does not make it feasible to be a better than Random Forest. Both Elastic Net models came out to be the fastest but their accuracy metrics are questionable, especially the Elastic Net with factorized predictors.\n\n
+
+Beyond the analysis, during the EDA portion there were certain trends that have meaningful insight. The majority of mass killings in the US occurred with a firearm and the data also shows the as a citizen, one would be more at risk if you live in Central-East area of the US or the West coast. The mid-West seems to be the safest area of the US excluding Hawaii and Alaska. Another point worth noting is that the majority of these mass murders occurred indiscriminately or due to interpersonal conflicts.\n\n
+
+Potential future work for this project would be to either increase multiple instances of the models and average out their results as the model results will vary every time they are ran or adding more data that could be useful such as survivor data and not just victim. With the addition of survivor data then survival analysis can be done with less worry of data leakage. With better data and refinement, these predictive models could be used as a powerful tool in times of need to reduce casualties.
+
+## **Discussion:**
+
+I think that all things considered, this project went well. The amount of cramming and staying up I have had to do this month to be able to make ends meet but I still feel rather proud of this project. I feel that had I had more time and less projects to do at the same time, I could have done a really deep analysis on this. For example, I could have showed better EDA, tried out different models, maybe found a better database that included better information I could have used, I could have done better final visualizations for the analysis to show better to the audience what my findings were, I could have formatted this project better to look nicer. There is so much that could be improved.\n\n
+
+Initially I wanted to do this data set because it seemed interesting and I felt I could do some good analysis on it. Oh how naive I was. On the surface the data set looked like something I could really use but I ended up coming up with more and more complications. One major complication was that the entire victim data set only consisted of dead victims. This was a huge problem, initially I was doing an analysis on survivors. I tracked whether there was a survivor based on whether there were any injured. That was already quite questionable but it was especially bad once I got to the random forest model. No matter what predictive models I used it almost always got either 100% or 99% accuracy. This was a huge red flag. I checked so many things until I finally found out that it was due to data leakage. A huge portion of the data set did not work as it would then be using data that it should not have and essentially would "cheat" into knowing what to predict leading to the insane accuracy metrics. This occurred on April 19th. That day I then had to restructure my entire question, my question then changed from whether I could predict whether there were any survivors to whether I could predict the fatality rate. On paper this would seem very similar but how I went about doing this was entirely different. I ended up completely dropping the victims data set and only kept it for the EDA and then I had to do a new models. My question now changed from predictive classification to prediction regression. I opted to using Elastic Net, mostly because I have already done Ridge and Lasso, Elastic Net is a combination and I did not have any experience with it. Random Forest was able to stay but I also could not do clustering now either so that is where XGBoost came in. I had to cram to understand and implement these models but I feel really satisfied with what I got.\n\n
+
+Time was a big problem during this entire project, well this entire last month of April. I actually have only barely managed to scrape by because of meticulous planning. All of this would not have happened had I scaled back my projects though. I decided to do these big projects for the sake of learning, and I have learned a lot, but I have very much suffered due to this.\n\n
+
+I feel I could probably have done more prior to April but I'm not sure whether it was a drive issue or I simply just did not understand things well enough, I definitely feel I have learned about two to three months worth of information during April alone. Had I been able to do things earlier I could also have gotten better feedback and earlier feedback from the deliverables.\n
+
+## **References:**
+
+Gulati, J. (2025, March 13). How to Implement XGBoost in R. Statology. https://www.statology.org/how-to-implement-xgboost-in-r/ \n
+ML | XGBoost (eXtreme Gradient Boosting). (2019, August 19). GeeksforGeeks. https://www.geeksforgeeks.org/ml-xgboost-extreme-gradient-boosting/ \n
+Crossman-Smith, J. (2024, March 24). XGBoost Explained: A Beginner’s Guide - Low Code for Data Science - Medium. Medium; Low Code for Data Science. Zach. (2020, November 24). How to Build Random Forests in R (Step-by-Step). Statology. https://www.statology.org/random-forest-in-r/ \n
+randomForest function - RDocumentation. (2024). Rdocumentation.org. https://www.rdocumentation.org/packages/randomForest/versions/4.7-1.2/topics/randomForest \n
+USA Today. (2022, August 18). Mass killings database reveals trends, details and anguish in every US event since 2006. Www.usatoday.com. https://www.usatoday.com/in-depth/graphics/2022/08/18/mass-killings-database-us-events-since-2006/9705311002/ \n
+Mass Killings in America, 2006 - present - dataset by associatedpress. (n.d.). Data.world. https://data.world/associatedpress/mass-killings-public \n\n
+
+ChatGPT and Perplexity were both consulted for explaining topics and help with coding. This information was then double checked with other online resources.
